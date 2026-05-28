@@ -21,6 +21,6 @@ function saveAdminPlayerField(id,field,value){if(!new Set(["displayName","riotId
 function updatePlayerList(players,id,field,value){if(!Array.isArray(players))return;const p=players.find((item)=>item.id===id);if(p)p[field]=String(value||"").trim()}
 function syncAccountProfiles(previous,updated){try{const accounts=JSON.parse(localStorage.getItem(ACCOUNTS_KEY)||"{}");Object.keys(accounts).forEach((key)=>{if(profileMatches(accounts[key]?.profile,previous))accounts[key].profile={...(accounts[key].profile||{}),...updated}});originalSetItem(ACCOUNTS_KEY,JSON.stringify(accounts));const current=JSON.parse(localStorage.getItem(PROFILE_KEY)||"null");if(profileMatches(current,previous))originalSetItem(PROFILE_KEY,JSON.stringify({...current,...updated}))}catch{}}
 function profileMatches(profile,player){if(!profile||!player)return false;return["riotId","discordId","displayName","accountEmail"].some((key)=>normalizeLoose(profile[key])&&normalizeLoose(profile[key])===normalizeLoose(player[key]))}
-function normalizeLoose(value){return String(value||"").toLowerCase().normalize("NFKC").replace(/[#].*$/,").replace(/[^a-z0-9@\._-]/g,"")}
+function normalizeLoose(value){return String(value||"").toLowerCase().normalize("NFKC").replace(/[#].*$/," ").trim().replace(/[^a-z0-9@\._-]/g,"")}
 function escapeAttr(value){return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
 })();
