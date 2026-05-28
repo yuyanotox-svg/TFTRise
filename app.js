@@ -1,0 +1,2854 @@
+const STORAGE_KEY = "tft-space-gods-cup";
+const SESSION_KEY = "tftrise-current-user";
+const PROFILE_KEY = "tftrise-profile";
+const ACCOUNTS_KEY = "tftrise-accounts";
+const ADMIN_PIN = "admin";
+const BLOCKS = [
+  { label: "第1ブロック", games: [1, 2] },
+  { label: "第2ブロック", games: [3, 4] },
+  { label: "第3ブロック", games: [5, 6] },
+];
+
+const scoreForPlacement = (placement) => (placement ? 9 - Number(placement) : 0);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+const DEFAULT_AVATAR_URL = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/29.jpg";
+const REWARD_TITLES = [
+  { id: "champion", name: "初代王者", note: "大会優勝報酬" },
+  { id: "finalist", name: "決勝卓の証明", note: "決勝進出報酬" },
+  { id: "top4", name: "TOP4常連", note: "上位入賞報酬" },
+];
+const REWARD_FRAMES = [
+  { id: "gold", name: "Champion Gold", note: "大会優勝フレーム" },
+  { id: "blue", name: "Finalist Blue", note: "決勝進出フレーム" },
+];
+const defaultStages = () => [
+  { name: "6戦総合pt", detail: "全6戦。ロビー抽選の頻度は管理側の設定に従い、合計ポイントで総合順位を決定。" },
+];
+
+function defaultTournament() {
+  return {
+    id: uid(),
+    name: "新しい大会",
+    startAt: "",
+    status: "entry",
+    formatType: "sixGame",
+    maxPlayers: 256,
+    lobbyRule: "every2Games",
+    stages: defaultStages(),
+  };
+}
+
+const defaultState = () => ({
+  activeTournamentId: "",
+  tournaments: [],
+  tournament: null,
+  players: [],
+  lobbies: [[], [], []],
+  lobbyHosts: [[], [], []],
+  results: {},
+  reports: [],
+});
+
+let state = loadState();
+let currentUserId = localStorage.getItem(SESSION_KEY) || "";
+let currentProfile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+if (!currentProfile && currentUserId) {
+  const player = state.players.find((item) => item.id === currentUserId);
+  if (player) currentProfile = {
+    displayName: player.displayName,
+    riotId: player.riotId,
+    discordId: player.discordId,
+    xAccount: player.xAccount,
+    avatarUrl: player.avatarUrl,
+    selectedTitle: player.selectedTitle,
+    earnedTitles: player.earnedTitles,
+    avatarFrame: player.avatarFrame,
+  };
+}
+let accounts = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "{}");
+let authMode = "login";
+let selectedReportFile = null;
+let latestReportMatches = [];
+
+const els = {
+  authForm: document.querySelector("#authForm"),
+  authLoginId: document.querySelector("#authLoginId"),
+  authPassword: document.querySelector("#authPassword"),
+  authProfileFields: document.querySelector("#authProfileFields"),
+  authDisplayName: document.querySelector("#authDisplayName"),
+  authRiotId: document.querySelector("#authRiotId"),
+  authDiscordId: document.querySelector("#authDiscordId"),
+  authXAccount: document.querySelector("#authXAccount"),
+  authSubmitBtn: document.querySelector("#authSubmitBtn"),
+  authHelpText: document.querySelector("#authHelpText"),
+  reportNavBtn: document.querySelector("#reportNavBtn"),
+  homePlayerCount: document.querySelector("#homePlayerCount"),
+  homeSubCount: document.querySelector("#homeSubCount"),
+  homeCompletedGames: document.querySelector("#homeCompletedGames"),
+  entryCtaPanel: document.querySelector("#entryCtaPanel"),
+  entryCtaTitle: document.querySelector("#entryCtaTitle"),
+  entryCtaText: document.querySelector("#entryCtaText"),
+  homeEntryBtn: document.querySelector("#homeEntryBtn"),
+  homeCheckInBtn: document.querySelector("#homeCheckInBtn"),
+  entryCompleteToast: document.querySelector("#entryCompleteToast"),
+  publicTournamentName: document.querySelector("#publicTournamentName"),
+  publicTournamentSummary: document.querySelector("#publicTournamentSummary"),
+  publicStatusBadge: document.querySelector("#publicStatusBadge"),
+  publicStartAt: document.querySelector("#publicStartAt"),
+  publicFormatName: document.querySelector("#publicFormatName"),
+  publicLobbyRule: document.querySelector("#publicLobbyRule"),
+  publicFormatDetails: document.querySelector("#publicFormatDetails"),
+  publicTimelineDetails: document.querySelector("#publicTimelineDetails"),
+  tournamentCarousel: document.querySelector("#tournamentCarousel"),
+  publicPlayersList: document.querySelector("#publicPlayersList"),
+  publicStandingsPanel: document.querySelector("#publicStandingsPanel"),
+  publicStandingsList: document.querySelector("#publicStandingsList"),
+  publicLobbyPanel: document.querySelector("#publicLobbyPanel"),
+  publicLobbyList: document.querySelector("#publicLobbyList"),
+  pastTournamentsList: document.querySelector("#pastTournamentsList"),
+  tournamentCard: document.querySelector("#tournamentCard"),
+  tournamentDialog: document.querySelector("#tournamentDialog"),
+  dialogCloseBtn: document.querySelector("#dialogCloseBtn"),
+  dialogTournamentName: document.querySelector("#dialogTournamentName"),
+  dialogStatus: document.querySelector("#dialogStatus"),
+  dialogStartAt: document.querySelector("#dialogStartAt"),
+  dialogFormatName: document.querySelector("#dialogFormatName"),
+  dialogLobbyRule: document.querySelector("#dialogLobbyRule"),
+  dialogEntryBtn: document.querySelector("#dialogEntryBtn"),
+  dialogReportBtn: document.querySelector("#dialogReportBtn"),
+  dialogDetailToggle: document.querySelector("#dialogDetailToggle"),
+  dialogTimelineToggle: document.querySelector("#dialogTimelineToggle"),
+  entryNoticeDialog: document.querySelector("#entryNoticeDialog"),
+  entryNoticeAgreeBtn: document.querySelector("#entryNoticeAgreeBtn"),
+  entryNoticeCancelBtn: document.querySelector("#entryNoticeCancelBtn"),
+  entryNoticeTimeline: document.querySelector("#entryNoticeTimeline"),
+  entryTimelineConfirm: document.querySelector("#entryTimelineConfirm"),
+  hostDialog: document.querySelector("#hostDialog"),
+  hostDialogText: document.querySelector("#hostDialogText"),
+  hostDialogCloseBtn: document.querySelector("#hostDialogCloseBtn"),
+  openLobbyGuideBtn: document.querySelector("#openLobbyGuideBtn"),
+  lobbyGuideDialog: document.querySelector("#lobbyGuideDialog"),
+  guideCloseBtn: document.querySelector("#guideCloseBtn"),
+  reportGame: document.querySelector("#reportGame"),
+  reportLobby: document.querySelector("#reportLobby"),
+  reportTargetSummary: document.querySelector("#reportTargetSummary"),
+  reportSubmitterName: document.querySelector("#reportSubmitterName"),
+  reportGate: document.querySelector("#reportGate"),
+  reportImage: document.querySelector("#reportImage"),
+  reportPreview: document.querySelector("#reportPreview"),
+  reportStatus: document.querySelector("#reportStatus"),
+  reportMatches: document.querySelector("#reportMatches"),
+  manualFallbackRows: document.querySelector("#manualFallbackRows"),
+  mySummary: document.querySelector("#mySummary"),
+  myNextAction: document.querySelector("#myNextAction"),
+  myEntryActions: document.querySelector("#myEntryActions"),
+  myProfileOutput: document.querySelector("#myProfileOutput"),
+  myLobbyOutput: document.querySelector("#myLobbyOutput"),
+  myHistoryOutput: document.querySelector("#myHistoryOutput"),
+  myPastResultsOutput: document.querySelector("#myPastResultsOutput"),
+  myPageTopBtn: document.querySelector("#myPageTopBtn"),
+  checkInDialog: document.querySelector("#checkInDialog"),
+  checkInDialogCloseBtn: document.querySelector("#checkInDialogCloseBtn"),
+  checkInDialogBtn: document.querySelector("#checkInDialogBtn"),
+  analyzeReportBtn: document.querySelector("#analyzeReportBtn"),
+  submitOcrBtn: document.querySelector("#submitOcrBtn"),
+  submitManualBtn: document.querySelector("#submitManualBtn"),
+  logoutTopBtn: document.querySelector("#logoutTopBtn"),
+  adminOpenBtn: document.querySelector("#adminOpenBtn"),
+  adminLock: document.querySelector("#adminLock"),
+  adminConsole: document.querySelector("#adminConsole"),
+  adminPin: document.querySelector("#adminPin"),
+  adminLoginBtn: document.querySelector("#adminLoginBtn"),
+  openEntryBtn: document.querySelector("#openEntryBtn"),
+  openCheckInBtn: document.querySelector("#openCheckInBtn"),
+  startTournamentBtn: document.querySelector("#startTournamentBtn"),
+  finishTournamentBtn: document.querySelector("#finishTournamentBtn"),
+  generateAllBtn: document.querySelector("#generateAllBtn"),
+  blockActions: document.querySelector(".block-actions"),
+  seed256Btn: document.querySelector("#seed256Btn"),
+  exportBtn: document.querySelector("#exportBtn"),
+  importFile: document.querySelector("#importFile"),
+  resetBtn: document.querySelector("#resetBtn"),
+  playersTable: document.querySelector("#playersTable"),
+  lobbyOutput: document.querySelector("#lobbyOutput"),
+  adminResultsOutput: document.querySelector("#adminResultsOutput"),
+  standingsTable: document.querySelector("#standingsTable"),
+  placementTemplate: document.querySelector("#placementOptions"),
+  createTournamentBtn: document.querySelector("#createTournamentBtn"),
+  deleteTournamentBtn: document.querySelector("#deleteTournamentBtn"),
+  deleteAllTournamentsBtn: document.querySelector("#deleteAllTournamentsBtn"),
+  tournamentList: document.querySelector("#tournamentList"),
+  tournamentForm: document.querySelector("#tournamentForm"),
+  tournamentName: document.querySelector("#tournamentName"),
+  tournamentStart: document.querySelector("#tournamentStart"),
+  tournamentStatus: document.querySelector("#tournamentStatus"),
+  tournamentFormatType: document.querySelector("#tournamentFormatType"),
+  tournamentMaxPlayers: document.querySelector("#tournamentMaxPlayers"),
+  tournamentLobbyRule: document.querySelector("#tournamentLobbyRule"),
+  formatStages: document.querySelector("#formatStages"),
+  addStageBtn: document.querySelector("#addStageBtn"),
+};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const loaded = raw ? { ...defaultState(), ...JSON.parse(raw) } : defaultState();
+    if (!loaded.tournament && loaded.tournaments?.length) {
+      const first = loaded.tournaments[0];
+      loaded.activeTournamentId = first.id;
+      loaded.tournament = structuredClone(first.tournament);
+      loaded.players = structuredClone(first.players);
+      loaded.lobbies = structuredClone(first.lobbies);
+      loaded.lobbyHosts = structuredClone(first.lobbyHosts);
+      loaded.results = structuredClone(first.results);
+      loaded.reports = structuredClone(first.reports);
+    }
+    if (!loaded.tournament) return loaded;
+    if (loaded.tournament?.status === "upcoming") loaded.tournament.status = "entry";
+    if (loaded.tournament?.formatType === "openSwiss") {
+      loaded.tournament.formatType = "sixGame";
+    }
+    loaded.tournaments?.forEach((item) => {
+      if (item.tournament?.status === "upcoming") item.tournament.status = "entry";
+      if (item.tournament?.formatType === "openSwiss") item.tournament.formatType = "sixGame";
+      if (!item.tournament?.maxPlayers) item.tournament.maxPlayers = 256;
+    });
+    if (!loaded.tournament.maxPlayers) loaded.tournament.maxPlayers = 256;
+    if (
+      loaded.tournament?.formatType === "oneDayElim" &&
+      loaded.tournament.stages?.some((stage) => stage.detail === "128名から64名へ絞り込み。")
+    ) {
+      loaded.tournament.stages = formatTemplate("oneDayElim");
+    }
+    if (loaded.tournament?.name === "SPACE GODS CUSPACE GODS TEST") {
+      loaded.tournament.name = "SPACE GODS CUP";
+    }
+    if (!loaded.tournaments?.length && loaded.tournament) {
+      loaded.tournament.id = loaded.tournament.id || loaded.activeTournamentId || "main";
+      loaded.activeTournamentId = loaded.tournament.id;
+      loaded.tournaments = [snapshotCurrentTournament(loaded)];
+    }
+    return loaded;
+  } catch {
+    return defaultState();
+  }
+}
+
+function saveState() {
+  if (hasTournament()) syncActiveTournament();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function hasTournament() {
+  return Boolean(state.tournament && state.activeTournamentId);
+}
+
+function snapshotCurrentTournament(source = state) {
+  if (!source.tournament) return null;
+  return {
+    id: source.tournament.id || source.activeTournamentId || uid(),
+    tournament: structuredClone(source.tournament),
+    players: structuredClone(source.players),
+    lobbies: structuredClone(source.lobbies),
+    lobbyHosts: structuredClone(source.lobbyHosts),
+    results: structuredClone(source.results),
+    reports: structuredClone(source.reports),
+  };
+}
+
+function syncActiveTournament() {
+  const snapshot = snapshotCurrentTournament();
+  if (!snapshot) return;
+  const index = state.tournaments.findIndex((item) => item.id === snapshot.id);
+  if (index >= 0) state.tournaments[index] = snapshot;
+  else state.tournaments.push(snapshot);
+  state.activeTournamentId = snapshot.id;
+}
+
+function automatedTournamentStatus(tournament) {
+  if (!tournament) return "entry";
+  const current = tournament.status === "upcoming" ? "entry" : tournament.status || "entry";
+  if (current === "live" || current === "finished") return current;
+  if (!tournament.startAt) return current === "ready" ? "ready" : "entry";
+  const start = new Date(tournament.startAt).getTime();
+  if (!Number.isFinite(start)) return "entry";
+  const now = Date.now();
+  const checkInOpen = start - 30 * 60 * 1000;
+  if (now < checkInOpen) return "entry";
+  if (now <= start) return "checkin";
+  return "ready";
+}
+
+function applyTournamentAutomation() {
+  (state.tournaments || []).forEach((item) => {
+    if (item.tournament) item.tournament.status = automatedTournamentStatus(item.tournament);
+  });
+  if (state.tournament) state.tournament.status = automatedTournamentStatus(state.tournament);
+}
+
+function prunePrematureLobbies() {
+  if (!hasTournament() || state.tournament.status !== "live") return;
+  const blocks = getLobbyBlocks();
+  let lockedFrom = -1;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const hasLobby = Boolean(state.lobbies?.[index]?.length);
+    if (!hasLobby) {
+      lockedFrom = index + 1;
+      break;
+    }
+    if (!isBlockComplete(index)) {
+      lockedFrom = index + 1;
+      break;
+    }
+  }
+  if (lockedFrom < 0) return;
+  for (let index = lockedFrom; index < blocks.length; index += 1) {
+    if (state.lobbies?.[index]) state.lobbies[index] = [];
+    if (state.lobbyHosts?.[index]) state.lobbyHosts[index] = [];
+    blocks[index].games.forEach((gameNo) => {
+      if (state.results?.[gameNo] && !Object.keys(state.results[gameNo]).length) delete state.results[gameNo];
+    });
+  }
+}
+
+function loadTournament(id) {
+  applyTournamentAutomation();
+  syncActiveTournament();
+  const target = state.tournaments.find((item) => item.id === id);
+  if (!target) return;
+  setActiveTournamentFromSnapshot(target);
+  render();
+}
+
+function setActiveTournamentFromSnapshot(target) {
+  state.activeTournamentId = target.id;
+  state.tournament = structuredClone(target.tournament);
+  state.players = structuredClone(target.players);
+  state.lobbies = structuredClone(target.lobbies);
+  state.lobbyHosts = structuredClone(target.lobbyHosts);
+  state.results = structuredClone(target.results);
+  state.reports = structuredClone(target.reports);
+}
+
+function visibleHomeTournaments() {
+  return (state.tournaments || []).filter((item) => item.tournament?.status !== "finished");
+}
+
+function ensureActiveHomeTournament() {
+  if (location.hash && location.hash !== "#home") return;
+  if (state.tournament?.status !== "finished") return;
+  const next = visibleHomeTournaments()[0];
+  if (next) setActiveTournamentFromSnapshot(next);
+}
+
+function findTournamentForCurrentProfile() {
+  const riotKey = normalize(currentProfile?.riotId || "");
+  if (!riotKey) return null;
+  const scored = (state.tournaments || [])
+    .map((tour) => {
+      const player = (tour.players || []).find((item) => normalize(item.riotId || "") === riotKey);
+      if (!player) return null;
+      const status = tour.tournament?.status || "entry";
+      const priority = { live: 5, ready: 4, checkin: 3, entry: 2, finished: 1 }[status] || 0;
+      return { tour, player, priority };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.priority - a.priority);
+  return scored[0] || null;
+}
+
+function ensureActiveTournamentForMyPage() {
+  const match = findTournamentForCurrentProfile();
+  if (!match) return;
+  if (state.activeTournamentId !== match.tour.id) setActiveTournamentFromSnapshot(match.tour);
+  currentUserId = match.player.id;
+  localStorage.setItem(SESSION_KEY, currentUserId);
+}
+
+function createTournament() {
+  if (hasTournament()) syncActiveTournament();
+  const tournament = defaultTournament();
+  tournament.name = `新しい大会 ${state.tournaments.length + 1}`;
+  state.activeTournamentId = tournament.id;
+  state.tournament = tournament;
+  state.players = [];
+  state.lobbies = [];
+  state.lobbyHosts = [];
+  state.results = {};
+  state.reports = [];
+  state.tournaments.push(snapshotCurrentTournament());
+  render();
+}
+
+function deleteCurrentTournament() {
+  if (!hasTournament()) return;
+  const name = state.tournament.name || "現在の大会";
+  const typed = prompt(`注意: 「${name}」を削除します。\n参加者、ロビー、結果、提出レポートも消えます。\n削除する場合は 大会削除 と入力してください。`);
+  if (typed !== "大会削除") return;
+  state.tournaments = state.tournaments.filter((item) => item.id !== state.activeTournamentId);
+  if (!state.tournaments.length) {
+    clearActiveTournament();
+    render();
+    return;
+  }
+  const next = state.tournaments[0];
+  state.activeTournamentId = next.id;
+  state.tournament = structuredClone(next.tournament);
+  state.players = structuredClone(next.players);
+  state.lobbies = structuredClone(next.lobbies);
+  state.lobbyHosts = structuredClone(next.lobbyHosts);
+  state.results = structuredClone(next.results);
+  state.reports = structuredClone(next.reports);
+  render();
+}
+
+function deleteAllTournaments() {
+  if (!state.tournaments.length && !hasTournament()) return;
+  const typed = prompt("注意: 作成済みの大会をすべて削除します。\n参加者、ロビー、結果、提出レポートもすべて消えます。\n削除する場合は 全部削除 と入力してください。");
+  if (typed !== "全部削除") return;
+  clearActiveTournament();
+  render();
+  go("admin");
+}
+
+function clearActiveTournament() {
+  state.activeTournamentId = "";
+  state.tournament = null;
+  state.players = [];
+  state.lobbies = [];
+  state.lobbyHosts = [];
+  state.results = {};
+  state.reports = [];
+  state.tournaments = [];
+}
+
+function render() {
+  applyTournamentAutomation();
+  prunePrematureLobbies();
+  if (hasTournament()) syncActiveTournament();
+  ensureActiveHomeTournament();
+  renderHome();
+  renderPastTournaments();
+  renderAuthMode();
+  renderReportSelectors();
+  renderMyPage();
+  renderAdmin();
+  renderTopActions();
+  saveState();
+}
+
+function renderTopActions() {
+  els.logoutTopBtn.classList.toggle("hidden", !currentProfile);
+  const canReport = Boolean(getCurrentReportTarget());
+  els.reportNavBtn.classList.toggle("hidden", !canReport);
+}
+
+function renderAuthMode() {
+  document.querySelectorAll(".auth-mode").forEach((button) => button.classList.toggle("active", button.dataset.authMode === authMode));
+  const isRegister = authMode === "register";
+  els.authProfileFields.classList.toggle("hidden", !isRegister);
+  els.authSubmitBtn.textContent = isRegister ? "新規登録" : "ログイン";
+  els.authHelpText.textContent = isRegister
+    ? "新規登録では大会運営に必要な表示名、Riot ID、Discord IDを登録します。"
+    : "既存アカウントはユーザー名またはメールアドレスとパスワードだけでログインできます。";
+}
+
+function go(screenId) {
+  if (!currentProfile && screenId !== "opening") screenId = "opening";
+  document.querySelectorAll(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === screenId));
+  document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.go === screenId));
+  if (location.hash !== `#${screenId}`) location.hash = screenId;
+}
+
+function renderHome() {
+  renderTournamentCarousel();
+  const hasVisibleTournament = hasTournament() && state.tournament.status !== "finished";
+  if (!hasVisibleTournament) {
+    els.publicTournamentName.textContent = "受付中・進行中の大会はありません";
+    els.publicTournamentSummary.textContent = "終了した大会は過去大会から最終順位を確認できます。新しい大会が作成されるとここに表示されます。";
+    els.publicStatusBadge.textContent = "大会なし";
+    els.publicStatusBadge.dataset.status = "empty";
+    els.tournamentCard.dataset.status = "empty";
+    els.tournamentCard.dataset.theme = "empty";
+    els.publicStartAt.textContent = "-";
+    els.publicFormatName.textContent = "-";
+    els.dialogTournamentName.textContent = "開催予定の大会はありません";
+    els.dialogStatus.textContent = "準備中";
+    els.dialogStartAt.textContent = "-";
+    els.dialogFormatName.textContent = "-";
+    els.dialogLobbyRule.textContent = "-";
+    els.dialogEntryBtn.classList.add("hidden");
+    els.dialogReportBtn.classList.add("hidden");
+    els.publicFormatDetails.classList.add("hidden");
+    els.publicTimelineDetails.classList.add("hidden");
+    els.homePlayerCount.textContent = "0";
+    els.homeSubCount.textContent = "0";
+    els.homeCompletedGames.textContent = "0/6";
+    renderPublicPlayers([], []);
+    renderPublicStandings("none");
+    renderPublicLobbies("none");
+    renderEntryCta("none");
+    return;
+  }
+  const mainPlayers = state.players.filter((player) => !player.isSubstitute);
+  const subs = state.players.filter((player) => player.isSubstitute);
+  const status = state.tournament.status || "entry";
+  els.tournamentCard.dataset.theme = tournamentTheme(state.activeTournamentId);
+  els.publicTournamentName.textContent = state.tournament.name || "SPACE GODS CUP";
+  els.publicTournamentSummary.textContent = `${statusMessage(status)} ログインしたら1タップで参戦。始まったら自分のテーブルと全体順位をすぐ確認できます。`;
+  els.publicStatusBadge.textContent = statusLabel(status);
+  els.publicStatusBadge.dataset.status = status;
+  els.tournamentCard.dataset.status = status;
+  els.publicStartAt.textContent = formatStartAt(state.tournament.startAt);
+  els.publicFormatName.textContent = formatTypeLabel(state.tournament.formatType);
+  els.dialogTournamentName.textContent = state.tournament.name || "SPACE GODS CUP";
+  els.dialogStatus.textContent = statusLabel(status);
+  els.dialogStartAt.textContent = formatStartAt(state.tournament.startAt);
+  els.dialogFormatName.textContent = formatTypeLabel(state.tournament.formatType);
+  els.dialogLobbyRule.textContent = lobbyRuleLabel(state.tournament.lobbyRule || defaultLobbyRuleForFormat(state.tournament.formatType));
+  const isEntered = Boolean(getPlayer(currentUserId));
+  els.dialogEntryBtn.classList.toggle("hidden", status !== "entry" && !isEntered);
+  els.dialogEntryBtn.textContent = isEntered ? "マイページで確認" : "エントリーする";
+  els.dialogReportBtn.classList.toggle("hidden", status !== "live");
+  els.publicFormatDetails.classList.add("hidden");
+  els.publicTimelineDetails.classList.add("hidden");
+  els.dialogDetailToggle.textContent = "大会詳細";
+  els.dialogTimelineToggle.textContent = "タイムライン";
+  renderPublicFormatDetails();
+  renderPublicTimelineDetails();
+  els.homePlayerCount.textContent = `${mainPlayers.length}/${state.tournament.maxPlayers || 256}`;
+  els.homeSubCount.textContent = subs.length;
+  els.homeCompletedGames.textContent = `${countCompletedGames()}/6`;
+  renderPublicPlayers(mainPlayers, subs);
+  renderPublicStandings(status);
+  renderPublicLobbies(status);
+  renderEntryCta(status);
+  maybeShowCheckInDialog();
+}
+
+function renderTournamentCarousel() {
+  if (!els.tournamentCarousel) return;
+  const tournaments = visibleHomeTournaments();
+  if (!tournaments.length) {
+    els.tournamentCarousel.innerHTML = `
+      <div class="carousel-head">
+        <div>
+          <p class="eyebrow">Tournaments</p>
+          <h2>受付中・進行中の大会はありません</h2>
+        </div>
+        <button class="carousel-archive-link" type="button" data-go="past">過去大会</button>
+      </div>
+    `;
+    return;
+  }
+  els.tournamentCarousel.innerHTML = `
+    <div class="carousel-head">
+      <div>
+        <p class="eyebrow">Tournaments</p>
+        <h2>大会を選択</h2>
+      </div>
+      <div class="carousel-actions">
+        <span>${tournaments.length}件</span>
+        <button class="carousel-archive-link" type="button" data-go="past">過去大会</button>
+      </div>
+    </div>
+    <div class="tournament-slide-row">
+      ${tournaments.map((item, index) => {
+        const tournament = item.tournament || {};
+        const players = item.players || [];
+        const mainCount = players.filter((player) => !player.isSubstitute).length;
+        const isActive = item.id === state.activeTournamentId;
+        return `
+          <button class="tournament-slide ${isActive ? "active" : ""}" type="button" data-tournament-id="${escapeHtml(item.id)}" data-theme="${tournamentTheme(item.id)}">
+            <span class="slide-status" data-status="${escapeHtml(tournament.status || "entry")}">${escapeHtml(statusLabel(tournament.status || "entry"))}</span>
+            <strong>${escapeHtml(tournament.name || "無題の大会")}</strong>
+            <small>${escapeHtml(formatStartAt(tournament.startAt))}</small>
+            <em>${escapeHtml(formatTypeLabel(tournament.formatType))}</em>
+            <i>${mainCount}/${tournament.maxPlayers || 256} エントリー</i>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function tournamentTheme(tournamentId) {
+  const index = Math.max(0, (state.tournaments || []).findIndex((item) => item.id === tournamentId));
+  return ["cosmic", "solar", "aqua", "ember", "violet"][index % 5];
+}
+
+function renderPastTournaments() {
+  if (!els.pastTournamentsList) return;
+  const past = (state.tournaments || []).filter((item) => item.tournament?.status === "finished");
+  if (!past.length) {
+    els.pastTournamentsList.innerHTML = `<div class="empty-state">終了した大会はまだありません。</div>`;
+    return;
+  }
+  els.pastTournamentsList.innerHTML = past.map((item) => {
+    const tournament = item.tournament || {};
+    const standings = calculateTournamentStandings(item).slice(0, 16);
+    const completedGames = [1, 2, 3, 4, 5, 6].filter((gameNo) => {
+      const values = Object.values(item.results?.[gameNo] || {}).filter(Boolean);
+      const mainCount = (item.players || []).filter((player) => !player.isSubstitute).length;
+      return values.length === mainCount && values.length > 0;
+    }).length;
+    return `
+      <article class="past-tournament-card" data-theme="${tournamentTheme(item.id)}">
+        <div class="past-tournament-head">
+          <div>
+            <span>${escapeHtml(formatStartAt(tournament.startAt))}</span>
+            <strong>${escapeHtml(tournament.name || "無題の大会")}</strong>
+            <small>${escapeHtml(formatTypeLabel(tournament.formatType))} / ${completedGames}/6 完了</small>
+          </div>
+          <span class="archive-chip">最終順位</span>
+        </div>
+        <div class="past-final-standings">
+          ${standings.length ? standings.map((row, index) => `
+            <div class="${row.player.id === currentUserId ? "is-current" : ""}">
+              <b>${index + 1}</b>
+              <span>${escapeHtml(row.player.displayName)}</span>
+              <strong>${row.points}pt</strong>
+            </div>
+          `).join("") : `<div class="empty-state">順位データはありません。</div>`}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderEntryCta(status) {
+  const user = getPlayer(currentUserId);
+  const loggedIn = Boolean(currentProfile);
+  const canEnter = status === "entry";
+  const checkInState = checkInWindowState();
+  els.entryCtaPanel.dataset.status = status;
+  els.homeCheckInBtn.classList.add("hidden");
+  if (!hasTournament()) {
+    els.entryCtaTitle.textContent = "大会開催待ち";
+    els.entryCtaText.textContent = "現在エントリーできる大会はありません。大会が作成されるとここから参加できます。";
+    els.homeEntryBtn.textContent = "受付前";
+    els.homeEntryBtn.disabled = true;
+    return;
+  }
+  if (!loggedIn) {
+    els.entryCtaTitle.textContent = "まずはTFTRiseにログイン";
+    els.entryCtaText.textContent = "アカウントを作れば、次から大会エントリーもチェックインも迷わず進めます。";
+    els.homeEntryBtn.textContent = "ログインへ";
+    els.homeEntryBtn.disabled = false;
+    return;
+  }
+  if (user) {
+    els.entryCtaTitle.textContent = status === "checkin" ? "チェックイン受付中" : "エントリー済み";
+    els.entryCtaText.textContent = user.checkedInAt
+      ? `${user.displayName} としてチェックイン済みです。`
+      : status === "checkin"
+        ? `${user.displayName} としてエントリー済みです。参加する場合はチェックインしてください。`
+        : `${user.displayName} としてこの大会に参加登録済みです。${checkInState.message}`;
+    els.homeEntryBtn.textContent = "マイページへ";
+    els.homeEntryBtn.disabled = false;
+    els.homeCheckInBtn.classList.toggle("hidden", checkInState.state !== "open" || Boolean(user.checkedInAt));
+    return;
+  }
+  if (status === "checkin") {
+    els.entryCtaTitle.textContent = user ? "チェックイン受付中" : "チェックイン受付中";
+    els.entryCtaText.textContent = user
+      ? `${user.displayName} としてエントリー済みです。参加する場合はチェックインしてください。`
+      : "エントリー受付は終了しました。参加登録済みの選手だけチェックインできます。";
+    els.homeEntryBtn.textContent = user ? "マイページで確認" : "受付終了";
+    els.homeEntryBtn.disabled = !user;
+    els.homeCheckInBtn.classList.toggle("hidden", !user || checkInState.state !== "open" || Boolean(user.checkedInAt));
+    return;
+  }
+  if (status === "ready") {
+    els.entryCtaTitle.textContent = "大会開始待ち";
+    els.entryCtaText.textContent = "チェックイン受付は終了しました。運営の開始確認後に大会が始まります。";
+    els.homeEntryBtn.textContent = user ? "マイページで確認" : "受付終了";
+    els.homeEntryBtn.disabled = !user;
+    return;
+  }
+  if (!canEnter) {
+    els.entryCtaTitle.textContent = "エントリー受付外";
+    els.entryCtaText.textContent = "この大会は現在エントリーを受け付けていません。";
+    els.homeEntryBtn.textContent = "受付外";
+    els.homeEntryBtn.disabled = true;
+    return;
+  }
+  els.entryCtaTitle.textContent = "この大会に挑戦する";
+  els.entryCtaText.textContent = `${currentProfile.displayName} として準備OK。1タップで参戦できます。`;
+  els.homeEntryBtn.textContent = "今すぐエントリー";
+  els.homeEntryBtn.disabled = false;
+}
+
+function renderPublicFormatDetails() {
+  const formatType = state.tournament?.formatType || "sixGame";
+  const lobbyRule = state.tournament?.lobbyRule || defaultLobbyRuleForFormat(formatType);
+  const maxPlayers = Number(state.tournament?.maxPlayers || 256);
+  const progress = formatProgressInfo(formatType);
+  els.publicFormatDetails.innerHTML = "";
+  const overview = document.createElement("section");
+  overview.className = "format-overview";
+  overview.innerHTML = `
+    <article class="format-overview-card primary">
+      <span>形式</span>
+      <strong>${escapeHtml(formatTypeLabel(formatType))}</strong>
+      <p>${escapeHtml(progress.summary)}</p>
+    </article>
+    <article class="format-overview-card">
+      <span>進行タイプ</span>
+      <strong>${escapeHtml(progress.type)}</strong>
+      <p>${escapeHtml(progress.detail)}</p>
+    </article>
+    <article class="format-overview-card">
+      <span>得点</span>
+      <strong>1位8pt - 8位1pt</strong>
+      <p>各試合の着順でptを付与。同点時は1位率、Top4率、平均着順の順で総合順位を算出します。</p>
+    </article>
+    <article class="format-overview-card">
+      <span>参加枠</span>
+      <strong>最大${escapeHtml(maxPlayers)}名</strong>
+      <p>定員を超えたエントリーは補欠として管理されます。</p>
+    </article>
+    <article class="format-overview-card">
+      <span>ロビー抽選</span>
+      <strong>${escapeHtml(lobbyRuleLabel(lobbyRule))}</strong>
+      <p>${escapeHtml(lobbyRule === "everyGame" ? "各試合ごとに全テーブルを再抽選します。" : "2試合ごとにテーブルを再抽選します。")}</p>
+    </article>
+  `;
+  els.publicFormatDetails.append(overview);
+
+  const scoreList = document.createElement("section");
+  scoreList.className = "score-detail-strip";
+  scoreList.innerHTML = [1, 2, 3, 4, 5, 6, 7, 8]
+    .map((place) => `<span><b>${place}位</b>${scoreForPlacement(place)}pt</span>`)
+    .join("");
+  els.publicFormatDetails.append(scoreList);
+
+  if (formatType === "multiDay") {
+    const tpc = document.createElement("section");
+    tpc.className = "tpc-format-flow";
+    tpc.innerHTML = `
+      <article><span>Day 1</span><strong>32人 → 24人</strong><p>4ロビーで6試合。2試合ごとに再抽選し、下位8人をカット。</p></article>
+      <article><span>Day 2</span><strong>24人 → 8人</strong><p>Match 1-2は3ロビー、Match 3-4は2ロビー、Match 5-6は1ロビー。合計16人をカットし、上位8人が決勝へ。</p></article>
+      <article><span>Day 3 Final</span><strong>チェックメイト20pt</strong><p>8人1ロビー。20pt到達後に1位を取った選手が優勝。優勝者確定後、最終順位を確定。</p></article>
+    `;
+    els.publicFormatDetails.append(tpc);
+  }
+}
+
+function formatProgressInfo(formatType) {
+  return {
+    sixGame: {
+      type: "1日完結 / 6戦総合pt",
+      summary: "8〜256人まで対応し、6戦の合計ptで順位を決めます。",
+      detail: "ロビー抽選の頻度を選べる基本形式です。2戦ごとならスイス式運用、毎試合なら完全再抽選運用になります。",
+    },
+    oneDayElim: {
+      type: "鰹節杯ルール / 勝ち上がり",
+      summary: "256→128→64→32→16→決勝の流れで進行します。",
+      detail: "各ラウンドでロビーを再抽選し、上位者が次へ進みます。",
+    },
+    multiDay: {
+      type: "TPC式 Day制 / 決勝チェックメイト",
+      summary: "Day1 32人、Day2 24人、Day3 8人決勝で進行します。",
+      detail: "Day3決勝は20pt到達後に1位を取った選手が優勝するチェックメイト方式です。",
+    },
+    custom: {
+      type: "カスタム形式",
+      summary: "運営が設定した大会詳細に沿って進行します。",
+      detail: "特殊ルールや招待制大会などに使います。",
+    },
+  }[formatType] || {
+    type: "1日完結 / 6戦総合pt",
+    summary: "6戦の合計ptで順位を決めます。",
+    detail: "基本形式です。",
+  };
+}
+
+function renderPublicTimelineDetails() {
+  const timeline = buildTournamentTimeline();
+  const section = document.createElement("section");
+  section.className = "tournament-timeline";
+  section.innerHTML = `
+    <div class="timeline-head">
+      <span>Schedule</span>
+      <strong>大会進行タイムライン</strong>
+    </div>
+  `;
+  if (!timeline.length) {
+    section.insertAdjacentHTML("beforeend", `<div class="empty-state">開始日時を設定すると、エントリー締切から6試合終了までの目安が表示されます。</div>`);
+    els.publicTimelineDetails.innerHTML = "";
+    els.publicTimelineDetails.append(section);
+    return;
+  }
+  const list = document.createElement("ol");
+  timeline.forEach((item) => {
+    const row = document.createElement("li");
+    row.innerHTML = `
+      <time>${escapeHtml(item.time)}</time>
+      <div>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.detail)}</p>
+      </div>
+    `;
+    list.append(row);
+  });
+  section.append(list);
+  els.publicTimelineDetails.innerHTML = "";
+  els.publicTimelineDetails.append(section);
+}
+
+function renderEntryNoticeTimeline() {
+  const timeline = buildTournamentTimeline();
+  els.entryNoticeTimeline.innerHTML = `
+    <div class="notice-timeline-head">
+      <span>必ず確認</span>
+      <strong>大会タイムライン</strong>
+    </div>
+  `;
+  if (!timeline.length) {
+    els.entryNoticeTimeline.insertAdjacentHTML("beforeend", `<div class="empty-state">開始日時が未設定です。運営からの案内を確認してください。</div>`);
+    return;
+  }
+  const list = document.createElement("ol");
+  timeline.forEach((item) => {
+    const row = document.createElement("li");
+    row.innerHTML = `
+      <time>${escapeHtml(item.time)}</time>
+      <span>${escapeHtml(item.title)}</span>
+    `;
+    list.append(row);
+  });
+  els.entryNoticeTimeline.append(list);
+}
+
+function buildTournamentTimeline() {
+  if (!state.tournament?.startAt) return [];
+  const gameOneStart = new Date(state.tournament.startAt);
+  if (Number.isNaN(gameOneStart.getTime())) return [];
+  const checkInStart = addMinutes(gameOneStart, -30);
+  const games = [1, 2, 3, 4, 5, 6].map((gameNo) => {
+    const start = addMinutes(gameOneStart, (gameNo - 1) * 60);
+    const end = addMinutes(start, 50);
+    return {
+      time: formatTimelineRange(start, end),
+      title: `Game ${gameNo}`,
+      detail: gameNo < 6 ? "試合50分、終了後10分休憩。次の試合は1時間後に開始予定です。" : "最終戦です。終了後、総合順位を確定します。",
+    };
+  });
+  return [
+    {
+      time: `〜 ${formatTimelineDateTime(checkInStart)}`,
+      title: "エントリー締切",
+      detail: "この時刻までにエントリーを完了してください。以降は新規エントリーとキャンセルはできません。",
+    },
+    {
+      time: formatTimelineRange(checkInStart, gameOneStart),
+      title: "チェックイン",
+      detail: "エントリー済みの選手だけがチェックインできます。30分間の受付です。",
+    },
+    ...games,
+  ];
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function formatTimelineDateTime(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatTimelineTime(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatTimelineRange(start, end) {
+  return `${formatTimelineDateTime(start)} - ${formatTimelineTime(end)}`;
+}
+
+function renderPublicPlayers(mainPlayers, subs) {
+  els.publicPlayersList.innerHTML = "";
+  if (!state.players.length) {
+    els.publicPlayersList.innerHTML = `<div class="empty-state">まだエントリーはありません。</div>`;
+    return;
+  }
+
+  [
+    ["参加者", mainPlayers],
+    ["補欠", subs],
+  ].forEach(([label, players]) => {
+    if (!players.length) return;
+    const section = document.createElement("section");
+    section.className = "public-player-group";
+    section.innerHTML = `<h3>${label}</h3>`;
+    const list = document.createElement("div");
+    list.className = "public-player-grid";
+    players.forEach((player) => {
+      const item = document.createElement("article");
+      const isCurrentPlayer = Boolean(currentUserId && player.id === currentUserId);
+      item.className = `public-player-card ${isCurrentPlayer ? "is-current" : ""}`;
+      const selectedTitleName = REWARD_TITLES.find((title) => title.id === player.selectedTitle)?.name || "";
+      item.innerHTML = `
+        <div class="public-player-avatar-wrap ${player.avatarFrame ? `frame-${escapeHtml(player.avatarFrame)}` : ""}">
+          <img class="public-player-avatar" src="${escapeHtml(getDisplayAvatar(player))}" alt="" />
+        </div>
+        <div class="public-player-info">
+          <div class="public-player-name-line">
+            <strong>${escapeHtml(player.displayName)}</strong>
+            ${isCurrentPlayer ? `<b>YOU</b>` : ""}
+          </div>
+          <span>${escapeHtml(player.riotId || "Riot ID未入力")}</span>
+          ${selectedTitleName ? `<em>${escapeHtml(selectedTitleName)}</em>` : ""}
+        </div>
+      `;
+      list.append(item);
+    });
+    section.append(list);
+    els.publicPlayersList.append(section);
+  });
+}
+
+function renderPublicStandings(status) {
+  if (status !== "live") {
+    els.publicStandingsPanel.classList.add("hidden");
+    els.publicStandingsList.innerHTML = "";
+    return;
+  }
+
+  const standings = calculateStandings();
+  els.publicStandingsPanel.classList.remove("hidden");
+  if (!standings.length) {
+    els.publicStandingsList.innerHTML = `<div class="empty-state">まだ順位データはありません。1試合目の結果報告後に反映されます。</div>`;
+    return;
+  }
+
+  const currentIndex = standings.findIndex((row) => row.player.id === currentUserId);
+  const topRows = standings.slice(0, 10);
+  const currentRow = currentIndex >= 10 ? standings[currentIndex] : null;
+  const rows = currentRow ? [...topRows, currentRow] : topRows;
+  els.publicStandingsList.innerHTML = rows
+    .map((row, index) => {
+      const rank = row === currentRow ? currentIndex + 1 : index + 1;
+      const isMe = row.player.id === currentUserId;
+      const marker = row === currentRow ? `<span class="standing-separator">あなたの現在地</span>` : "";
+      return `${marker}<article class="public-standing-row ${isMe ? "is-me" : ""}">
+        <span class="standing-rank">${rank}</span>
+        <strong>${escapeHtml(row.player.displayName)}</strong>
+        <small>${escapeHtml(row.player.riotId || "Riot ID未入力")}</small>
+        <b>${row.points}pt</b>
+      </article>`;
+    })
+    .join("");
+}
+
+function renderPublicLobbies(status) {
+  const shouldShow = ["ready", "live"].includes(status) && (state.lobbies || []).some((block) => block?.length);
+  els.publicLobbyPanel.classList.toggle("hidden", !shouldShow);
+  els.publicLobbyList.innerHTML = "";
+  if (!shouldShow) return;
+
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    const lobbies = state.lobbies[blockIndex] || [];
+    if (!lobbies.length) return;
+    const section = document.createElement("section");
+    section.className = "public-lobby-block";
+    section.innerHTML = `<h3>${escapeHtml(block.label)}</h3>`;
+    const grid = document.createElement("div");
+    grid.className = "public-lobby-grid";
+    lobbies.forEach((lobby, lobbyIndex) => {
+      const hostId = state.lobbyHosts?.[blockIndex]?.[lobbyIndex] || "";
+      const card = document.createElement("article");
+      card.className = "public-lobby-card";
+      card.innerHTML = `
+        <div class="public-lobby-card-head">
+          <strong>Lobby ${lobbyIndex + 1}</strong>
+          <span>開設者: ${escapeHtml(getPlayer(hostId)?.displayName || "未割り当て")}</span>
+        </div>
+        <ol>
+          ${lobby.map((playerId) => {
+            const player = getPlayer(playerId);
+            if (!player) return "";
+            return `<li class="${player.id === currentUserId ? "is-current" : ""}">
+              ${playerRiotDisplayMarkup(player)}
+            </li>`;
+          }).join("")}
+        </ol>
+      `;
+      grid.append(card);
+    });
+    section.append(grid);
+    els.publicLobbyList.append(section);
+  });
+}
+
+function renderReportSelectors() {
+  const target = getCurrentReportTarget();
+  els.reportGame.value = target?.game ? String(target.game) : "";
+  els.reportLobby.value = target?.lobbyIndex >= 0 ? String(target.lobbyIndex) : "";
+  els.reportTargetSummary.textContent = target
+    ? `Game ${target.game} / Lobby ${target.lobbyIndex + 1}`
+    : "あなたの報告対象ロビーはまだありません";
+  renderReportGate(target);
+  renderReportSubmitter();
+  renderManualFallback();
+}
+
+function renderReportGate(target) {
+  const locked = !target;
+  els.reportGate.classList.toggle("hidden", !locked);
+  els.reportGate.textContent = locked
+    ? "報告できるロビーがまだありません。大会開始後、管理側がロビーを生成すると自動で表示されます。"
+    : "";
+  [els.reportImage, els.analyzeReportBtn, els.submitOcrBtn, els.submitManualBtn].forEach((control) => {
+    control.disabled = locked;
+  });
+}
+
+function renderReportSubmitter() {
+  const player = getPlayer(currentUserId);
+  const profile = player || currentProfile;
+  els.reportSubmitterName.textContent = profile?.displayName
+    ? `${profile.displayName} として提出`
+    : "ログイン中のアカウントを使用";
+}
+
+function getCurrentReportTarget() {
+  if (!currentUserId || !hasTournament()) return null;
+  for (const game of [1, 2, 3, 4, 5, 6]) {
+    const blockIndex = getBlockIndex(game);
+    const lobbies = state.lobbies[blockIndex] || [];
+    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
+    if (lobbyIndex < 0) continue;
+    const lobby = lobbies[lobbyIndex];
+    const results = state.results[game] || {};
+    const completed = lobby.length && lobby.every((playerId) => results[playerId]);
+    if (!completed) return { game, blockIndex, lobbyIndex, lobby };
+  }
+  return null;
+}
+
+function renderMyPage() {
+  ensureActiveTournamentForMyPage();
+  const playerId = currentUserId;
+  const profile = currentProfile || getPlayer(playerId);
+  if (!profile) {
+    els.mySummary.innerHTML = `<div class="empty-state">ログインするとマイページを確認できます。</div>`;
+    els.myNextAction.innerHTML = "";
+    els.myEntryActions.innerHTML = "";
+    els.myProfileOutput.innerHTML = "";
+    els.myLobbyOutput.innerHTML = "";
+    els.myHistoryOutput.innerHTML = "";
+    els.myPastResultsOutput.innerHTML = "";
+    return;
+  }
+
+  const player = getPlayer(playerId);
+  if (!player) {
+    els.mySummary.innerHTML = `
+      <article><span>選手</span><strong>${escapeHtml(profile.displayName || "-")}</strong></article>
+      <article><span>状態</span><strong>未エントリー</strong></article>
+    `;
+    renderMyProfile(profile);
+    renderNextAction(null);
+    els.myEntryActions.innerHTML = "";
+    els.myLobbyOutput.innerHTML = "";
+    els.myHistoryOutput.innerHTML = `<div class="empty-state">大会ポップからエントリーすると、この大会の成績が表示されます。</div>`;
+    renderPastResults(profile);
+    return;
+  }
+  const history = [1, 2, 3, 4, 5, 6].map((gameNo) => Number(state.results[gameNo]?.[playerId] || 0));
+  const points = history.reduce((sum, placement) => sum + scoreForPlacement(placement), 0);
+  const played = history.filter(Boolean).length;
+  const standing = calculateStandings().findIndex((row) => row.player.id === playerId) + 1;
+  const standingText = played || ["live", "finished"].includes(state.tournament?.status) ? standing || "-" : "-";
+
+  els.mySummary.innerHTML = `
+    <article><span>選手</span><strong>${escapeHtml(player.displayName)}</strong></article>
+    <article><span>総合順位</span><strong>${standingText}</strong></article>
+    <article><span>獲得pt</span><strong>${points}</strong></article>
+    <article><span>消化</span><strong>${played}/6</strong></article>
+    <article><span>チェックイン</span><strong>${player.checkedInAt ? "済" : "未"}</strong></article>
+  `;
+  renderNextAction(player);
+  const canCancelEntry = state.tournament?.status === "entry" && !player.checkedInAt;
+  const cancelHelp = player.checkedInAt
+    ? "チェックイン後は大会進行に影響するためキャンセルできません。"
+    : canCancelEntry
+      ? "受付中はキャンセルできます。"
+      : "大会開始後はエントリーをキャンセルできません。";
+  els.myEntryActions.innerHTML = `
+    <div class="entry-cancel-card ${canCancelEntry ? "" : "is-locked"}">
+      <div>
+        <span>参加中の大会</span>
+        <strong>${escapeHtml(state.tournament?.name || "大会未設定")}</strong>
+        <small>${escapeHtml(cancelHelp)}</small>
+      </div>
+      ${canCancelEntry ? `<button class="danger-button cancel-entry-button" type="button">この大会のエントリーをキャンセル</button>` : ""}
+    </div>
+  `;
+  renderMyProfile(player);
+  renderMyLobbies(playerId);
+  renderMyHistory(history);
+  renderPastResults(player);
+  maybeShowHostDialog(playerId);
+}
+
+function renderMyProfile(profile) {
+  const avatar = getDisplayAvatar(profile);
+  const accountEmail = getCurrentAccountEmail();
+  const earnedTitles = Array.isArray(profile.earnedTitles) ? profile.earnedTitles : [];
+  const selectedTitle = earnedTitles.includes(profile.selectedTitle) ? profile.selectedTitle : "";
+  const selectedTitleName = REWARD_TITLES.find((title) => title.id === selectedTitle)?.name || "";
+  const earnedTitleOptions = REWARD_TITLES
+    .filter((title) => earnedTitles.includes(title.id))
+    .map((title) => `<option value="${title.id}" ${selectedTitle === title.id ? "selected" : ""}>${escapeHtml(title.name)}</option>`)
+    .join("");
+  els.myProfileOutput.innerHTML = `
+    <h3>アカウント情報</h3>
+    <div class="profile-hero">
+      <div class="profile-avatar-wrap ${profile.avatarFrame ? `frame-${escapeHtml(profile.avatarFrame)}` : ""}">
+        <img class="profile-avatar" src="${escapeHtml(avatar)}" alt="" />
+      </div>
+      <div>
+        <span>PLAYER ICON</span>
+        <strong>${escapeHtml(profile.displayName || "-")}</strong>
+        <em>${escapeHtml(selectedTitleName || "称号未設定")}</em>
+        <p>${escapeHtml(profile.riotId || "Riot ID未設定")}</p>
+      </div>
+    </div>
+    <div class="profile-grid">
+      <article><span>表示名</span><strong>${escapeHtml(profile.displayName || "-")}</strong></article>
+      <article><span>Riot ID</span><strong>${escapeHtml(profile.riotId || "-")}</strong></article>
+      <article><span>Discord</span><strong>${escapeHtml(profile.discordId || "-")}</strong></article>
+      <article><span>X</span><strong>${escapeHtml(profile.xAccount || "-")}</strong></article>
+      <article><span>称号</span><strong>${escapeHtml(selectedTitleName || "未設定")}</strong></article>
+      <article><span>メールアドレス連携</span><strong>${escapeHtml(accountEmail || "未連携")}</strong></article>
+    </div>
+    <details class="profile-edit">
+      <summary>アカウント情報を編集</summary>
+      <form id="profileEditForm" class="profile-edit-form">
+        <label>表示名<input name="displayName" required maxlength="32" value="${escapeHtml(profile.displayName || "")}" /></label>
+        <label>Riot ID<input name="riotId" required maxlength="48" value="${escapeHtml(profile.riotId || "")}" /></label>
+        <label>Discord ID<input name="discordId" required maxlength="48" value="${escapeHtml(profile.discordId || "")}" /></label>
+        <label>X（任意）<input name="xAccount" maxlength="32" value="${escapeHtml(profile.xAccount || "")}" /></label>
+        <button class="primary-button" type="submit">保存する</button>
+      </form>
+    </details>
+    <details class="profile-edit reward-cosmetics">
+      <summary>称号・報酬装飾</summary>
+      <form id="rewardCosmeticsForm" class="profile-edit-form">
+        <label>称号
+          <select name="selectedTitle" ${earnedTitles.length ? "" : "disabled"}>
+            <option value="">称号なし</option>
+            ${earnedTitleOptions}
+          </select>
+        </label>
+        <p class="security-note">称号、特別アイコン、フレームは大会報酬で解放されます。未獲得の装飾は選択できません。</p>
+        <div class="reward-grid">
+          <article class="reward-card active"><span>標準</span><strong>黒アイコン</strong><small>全プレイヤー共通</small></article>
+          ${REWARD_TITLES.map((title) => `<article class="reward-card ${earnedTitles.includes(title.id) ? "unlocked" : "locked"}"><span>称号</span><strong>${escapeHtml(title.name)}</strong><small>${escapeHtml(title.note)}</small></article>`).join("")}
+          ${REWARD_FRAMES.map((frame) => `<article class="reward-card locked"><span>フレーム</span><strong>${escapeHtml(frame.name)}</strong><small>${escapeHtml(frame.note)}</small></article>`).join("")}
+        </div>
+        <button class="primary-button" type="submit" ${earnedTitles.length ? "" : "disabled"}>装飾を保存</button>
+      </form>
+    </details>
+    <details class="profile-edit account-security">
+      <summary>メールアドレス連携・パスワード再設定</summary>
+      <form id="accountSecurityForm" class="profile-edit-form">
+        <label>メールアドレス連携<input name="accountEmail" type="email" maxlength="80" placeholder="mail@example.com" value="${escapeHtml(accountEmail)}" /></label>
+        <label>新しいパスワード<input name="newPassword" type="password" minlength="6" maxlength="80" placeholder="変更する場合のみ入力" /></label>
+        <label>新しいパスワード確認<input name="confirmPassword" type="password" minlength="6" maxlength="80" placeholder="もう一度入力" /></label>
+        <p class="security-note">メールアドレスを連携すると、次回からメールアドレスでもログインできます。実運用ではメール認証と再設定メール送信をサーバー側で実装します。</p>
+        <button class="primary-button" type="submit">アカウント保守情報を保存</button>
+      </form>
+    </details>
+  `;
+}
+
+function renderNextAction(player) {
+  if (!currentProfile) {
+    els.myNextAction.innerHTML = "";
+    return;
+  }
+  if (!hasTournament()) {
+    els.myNextAction.innerHTML = nextActionMarkup("大会待ち", "開催予定の大会はまだありません。運営が大会を作成するとホームに表示されます。", "home", "大会を見る");
+    return;
+  }
+  if (!player) {
+    els.myNextAction.innerHTML = nextActionMarkup("次にやること", "参加したい大会カードからエントリーしてください。", "home", "大会へ");
+    return;
+  }
+  const status = state.tournament.status;
+  const checkInState = checkInWindowState();
+  if (!player.checkedInAt && checkInState.state === "open") {
+    els.myNextAction.innerHTML = nextActionMarkup("チェックイン受付中", "大会開始前の30分間です。参加するなら今チェックインしてください。", "", "チェックイン", "check-in-now");
+    return;
+  }
+  const reportTarget = getCurrentReportTarget();
+  if (status === "live" && reportTarget) {
+    els.myNextAction.innerHTML = nextActionMarkup("結果報告できます", `あなたの報告対象は Game ${reportTarget.game} / Lobby ${reportTarget.lobbyIndex + 1} です。`, "report", "結果報告へ");
+    return;
+  }
+  const lobbyEntry = findCurrentLobbyEntry(player.id);
+  if (status === "live" && lobbyEntry) {
+    els.myNextAction.innerHTML = nextActionMarkup("自分のロビーを確認", `Game ${lobbyEntry.block.games.join("・")} / Lobby ${lobbyEntry.lobbyIndex + 1} に参加中です。`, "", "下のロビーを見る");
+    return;
+  }
+  if (status === "entry") {
+    els.myNextAction.innerHTML = nextActionMarkup("エントリー済み", checkInState.message, "home", "大会情報を見る");
+    return;
+  }
+  if (status === "ready") {
+    els.myNextAction.innerHTML = nextActionMarkup("大会開始待ち", "チェックイン受付は終了しました。運営が最終確認して大会を開始します。", "home", "大会情報を見る");
+    return;
+  }
+  els.myNextAction.innerHTML = nextActionMarkup("進行待ち", "運営のロビー生成または次の案内を待ってください。", "home", "大会情報を見る");
+}
+
+function nextActionMarkup(title, text, target, action, extraClass = "") {
+  const button = target
+    ? `<button class="primary-button next-action-button" type="button" data-go="${target}">${action}</button>`
+    : `<button class="secondary-button next-action-button ${extraClass}" type="button">${action}</button>`;
+  return `
+    <div>
+      <span>Next</span>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(text)}</p>
+    </div>
+    ${button}
+  `;
+}
+
+function renderPastResults(profile) {
+  const riotKey = normalize(profile.riotId || "");
+  const rows = state.tournaments
+    .map((tour) => {
+      const player = tour.players.find((item) => normalize(item.riotId || "") === riotKey && riotKey);
+      if (!player) return null;
+      const standings = calculateTournamentStandings(tour);
+      const standingIndex = standings.findIndex((row) => row.player.id === player.id);
+      const row = standings[standingIndex];
+      const history = row?.history || [1, 2, 3, 4, 5, 6].map((gameNo) => Number(tour.results[gameNo]?.[player.id] || 0));
+      const played = history.filter(Boolean).length;
+      const points = row?.points || history.reduce((sum, placement) => sum + scoreForPlacement(placement), 0);
+      return {
+        tour,
+        player,
+        points,
+        played,
+        history,
+        rank: standingIndex >= 0 ? standingIndex + 1 : 0,
+        total: tour.players.length,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.tour.tournament.startAt || 0) - new Date(a.tour.tournament.startAt || 0));
+
+  els.myPastResultsOutput.innerHTML = `<h3>大会成績</h3>`;
+  if (!rows.length) {
+    els.myPastResultsOutput.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ大会成績はありません。</div>`);
+    return;
+  }
+  rows.forEach((row) => {
+    const status = row.tour.tournament.status || "upcoming";
+    const showRank = ["live", "finished"].includes(status) && row.played > 0;
+    const rankLabel = status === "finished" ? "最終順位" : status === "live" ? "現在順位" : "状況";
+    const rankValue = showRank && row.rank ? `${row.rank} / ${row.total}` : "試合前";
+    const card = document.createElement("article");
+    card.className = `past-result-card is-${status}`;
+    card.innerHTML = `
+      <div class="past-result-head">
+        <div>
+          <strong>${escapeHtml(row.tour.tournament.name)}</strong>
+          <span>${escapeHtml(statusLabel(status))} / ${escapeHtml(formatStartAt(row.tour.tournament.startAt))}</span>
+        </div>
+        <b>${rankLabel}<em>${rankValue}</em></b>
+      </div>
+      <div class="past-result-stats">
+        <span>${row.points}pt</span>
+        <span>${row.played}/6戦</span>
+      </div>
+      <div class="history">${row.history.map((placement) => `<span>${placement || "-"}</span>`).join("")}</div>
+    `;
+    els.myPastResultsOutput.append(card);
+  });
+}
+
+function loginOrCreateUser(profile) {
+  const normalizedRiot = normalize(profile.riotId);
+  const player = state.players.find((item) => normalize(item.riotId) === normalizedRiot && normalizedRiot);
+  currentProfile = profile;
+  persistCurrentProfile();
+  currentUserId = player?.id || "";
+  if (currentUserId) localStorage.setItem(SESSION_KEY, currentUserId);
+  else localStorage.removeItem(SESSION_KEY);
+  render();
+}
+
+function persistCurrentProfile() {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
+  getCurrentAccountEntries().forEach(([key]) => {
+    accounts[key].profile = currentProfile;
+  });
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+}
+
+function getCurrentAccountEntries() {
+  if (!currentProfile) return [];
+  const currentKeys = [
+    normalize(currentProfile.displayName),
+    normalize(currentProfile.riotId),
+    normalize(currentProfile.discordId),
+    normalize(currentProfile.accountEmail),
+  ].filter(Boolean);
+  return Object.entries(accounts).filter(([key, account]) => {
+    const profile = account.profile || {};
+    return account.profile === currentProfile || [
+      key,
+      normalize(profile.displayName),
+      normalize(profile.riotId),
+      normalize(profile.discordId),
+      normalize(profile.accountEmail),
+    ].some((item) => currentKeys.includes(item));
+  });
+}
+
+function getCurrentAccountEmail() {
+  return currentProfile?.accountEmail || getCurrentAccountEntries().find(([key]) => key.includes("@"))?.[0] || "";
+}
+
+function getDisplayAvatar(profile) {
+  return profile?.specialAvatarUrl || DEFAULT_AVATAR_URL;
+}
+
+function updateCurrentProfile(profileInput) {
+  if (!currentProfile) return;
+  if (!profileInput.displayName || !profileInput.riotId || !profileInput.discordId) {
+    alert("表示名、Riot ID、Discord IDは必須です。");
+    return;
+  }
+
+  const previousProfile = currentProfile;
+  const previousKeys = new Set([
+    normalize(previousProfile.displayName),
+    normalize(previousProfile.riotId),
+    normalize(previousProfile.discordId),
+  ].filter(Boolean));
+  currentProfile = {
+    displayName: profileInput.displayName,
+    riotId: profileInput.riotId,
+    discordId: profileInput.discordId,
+    xAccount: profileInput.xAccount,
+    accountEmail: previousProfile.accountEmail || getCurrentAccountEmail(),
+    avatarUrl: DEFAULT_AVATAR_URL,
+    specialAvatarUrl: previousProfile.specialAvatarUrl || "",
+    selectedTitle: previousProfile.selectedTitle || "",
+    earnedTitles: Array.isArray(previousProfile.earnedTitles) ? previousProfile.earnedTitles : [],
+    avatarFrame: previousProfile.avatarFrame || "",
+  };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
+
+  Object.entries(accounts).forEach(([key, account]) => {
+    const accountKeys = [
+      key,
+      normalize(account.profile?.displayName),
+      normalize(account.profile?.riotId),
+      normalize(account.profile?.discordId),
+    ];
+    if (account.profile === previousProfile || accountKeys.some((item) => previousKeys.has(item))) {
+      accounts[key].profile = currentProfile;
+    }
+  });
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+
+  const player = getPlayer(currentUserId);
+  if (player) {
+    player.displayName = currentProfile.displayName;
+    player.riotId = currentProfile.riotId;
+    player.discordId = currentProfile.discordId;
+    player.xAccount = currentProfile.xAccount;
+    player.avatarUrl = currentProfile.avatarUrl;
+    player.specialAvatarUrl = currentProfile.specialAvatarUrl;
+    player.selectedTitle = currentProfile.selectedTitle;
+    player.earnedTitles = currentProfile.earnedTitles;
+    player.avatarFrame = currentProfile.avatarFrame;
+  }
+  render();
+}
+
+function updateRewardCosmetics(formInput) {
+  if (!currentProfile) return;
+  const earnedTitles = Array.isArray(currentProfile.earnedTitles) ? currentProfile.earnedTitles : [];
+  const selectedTitle = String(formInput.selectedTitle || "");
+  if (selectedTitle && !earnedTitles.includes(selectedTitle)) {
+    alert("未獲得の称号は設定できません。");
+    return;
+  }
+  currentProfile = {
+    ...currentProfile,
+    selectedTitle,
+  };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
+  getCurrentAccountEntries().forEach(([key]) => {
+    accounts[key].profile = currentProfile;
+  });
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  const player = getPlayer(currentUserId);
+  if (player) player.selectedTitle = selectedTitle;
+  render();
+}
+
+function updateAccountSecurity(formInput) {
+  if (!currentProfile) return;
+  const accountEmail = String(formInput.accountEmail || "").trim();
+  const newPassword = String(formInput.newPassword || "");
+  const confirmPassword = String(formInput.confirmPassword || "");
+  if (accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)) {
+    alert("有効なメールアドレスを入力してください。");
+    return;
+  }
+  if (newPassword || confirmPassword) {
+    if (newPassword.length < 6) {
+      alert("新しいパスワードは6文字以上で入力してください。");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      alert("確認用パスワードが一致していません。");
+      return;
+    }
+  }
+
+  const entries = getCurrentAccountEntries();
+  const primaryAccount = entries[0]?.[1] || { password: newPassword || "", profile: currentProfile };
+  const emailKey = normalize(accountEmail);
+  if (emailKey) {
+    const duplicate = accounts[emailKey];
+    const duplicateMatchesCurrent = entries.some(([key]) => key === emailKey);
+    if (duplicate && !duplicateMatchesCurrent) {
+      alert("このメールアドレスは別のアカウントで使用されています。");
+      return;
+    }
+  }
+
+  currentProfile = {
+    ...currentProfile,
+    accountEmail,
+  };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
+
+  const keysToUpdate = new Set(entries.map(([key]) => key));
+  if (!keysToUpdate.size) keysToUpdate.add(normalize(currentProfile.displayName || currentProfile.riotId || accountEmail));
+  if (emailKey) keysToUpdate.add(emailKey);
+
+  keysToUpdate.forEach((key) => {
+    if (!key) return;
+    const account = accounts[key] || primaryAccount;
+    accounts[key] = {
+      ...account,
+      password: newPassword || account.password || primaryAccount.password,
+      profile: currentProfile,
+    };
+  });
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  render();
+  alert("アカウント保守情報を保存しました。");
+}
+
+function removePlayerFromTournament(playerId) {
+  state.players = state.players.filter((player) => player.id !== playerId);
+  state.lobbies = state.lobbies.map((block) => block.map((lobby) => lobby.filter((id) => id !== playerId)));
+  state.lobbyHosts = state.lobbyHosts.map((block, blockIndex) => block.map((hostId, lobbyIndex) => {
+    if (hostId !== playerId) return hostId;
+    return state.lobbies[blockIndex]?.[lobbyIndex]?.[0] || "";
+  }));
+  Object.keys(state.results).forEach((gameNo) => delete state.results[gameNo][playerId]);
+  state.reports = state.reports.map((report) => ({
+    ...report,
+    matches: report.matches.filter((match) => match.playerId !== playerId),
+    winnerId: report.winnerId === playerId ? "" : report.winnerId,
+  }));
+}
+
+function cancelCurrentEntry() {
+  const player = getPlayer(currentUserId);
+  if (!player) return;
+  if (player.checkedInAt) {
+    alert("チェックイン後は大会進行に影響するため、エントリーをキャンセルできません。");
+    return;
+  }
+  if (state.tournament?.status !== "entry") {
+    alert("エントリー受付終了後はキャンセルできません。");
+    return;
+  }
+  if (!confirm("この大会のエントリーをキャンセルしますか？")) return;
+  removePlayerFromTournament(player.id);
+  currentUserId = "";
+  localStorage.removeItem(SESSION_KEY);
+  render();
+  go("mypage");
+}
+
+function authLoginOrRegister(loginId, password, profileInput) {
+  const key = normalize(loginId);
+  if (!key || !password) return;
+  const existing = accounts[key];
+  if (authMode === "login" && !existing) {
+    authMode = "register";
+    renderAuthMode();
+    els.authLoginId.value = loginId;
+    els.authPassword.value = password;
+    alert("アカウントが見つかりません。新規登録に切り替えました。表示名、Riot ID、Discord IDを入力して登録してください。");
+    return;
+  }
+  if (existing && existing.password !== password) {
+    alert("パスワードが違います。");
+    return;
+  }
+  if (authMode === "register" && existing) {
+    alert("このユーザー名またはメールアドレスは登録済みです。ログインを選んでください。");
+    return;
+  }
+  if (authMode === "register" && (!profileInput.displayName || !profileInput.riotId || !profileInput.discordId)) {
+    alert("新規登録には表示名、Riot ID、Discord IDが必要です。");
+    return;
+  }
+  const profile = existing?.profile || {
+    ...profileInput,
+    accountEmail: key.includes("@") ? loginId : "",
+  };
+  if (key.includes("@") && !profile.accountEmail) profile.accountEmail = loginId;
+  accounts[key] = { password, profile };
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  currentProfile = profile;
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
+  const player = state.players.find((item) => normalize(item.riotId) === normalize(profile.riotId) && profile.riotId);
+  currentUserId = player?.id || "";
+  if (currentUserId) localStorage.setItem(SESSION_KEY, currentUserId);
+  else localStorage.removeItem(SESSION_KEY);
+  render();
+  go("home");
+}
+
+function quickEnterCurrentProfile() {
+  if (!currentProfile) return;
+  if (!hasTournament()) {
+    alert("現在エントリーできる大会はありません。");
+    return;
+  }
+  const normalizedRiot = normalize(currentProfile.riotId);
+  let player = state.players.find((item) => normalize(item.riotId) === normalizedRiot && normalizedRiot);
+  if (!player) {
+    const maxPlayers = Number(state.tournament?.maxPlayers || 256);
+    const mainPlayerCount = state.players.filter((item) => !item.isSubstitute).length;
+    player = {
+      id: uid(),
+      displayName: currentProfile.displayName,
+      riotId: currentProfile.riotId,
+      discordId: currentProfile.discordId,
+      xAccount: currentProfile.xAccount,
+      avatarUrl: DEFAULT_AVATAR_URL,
+      specialAvatarUrl: currentProfile.specialAvatarUrl || "",
+      selectedTitle: currentProfile.selectedTitle || "",
+      earnedTitles: Array.isArray(currentProfile.earnedTitles) ? currentProfile.earnedTitles : [],
+      avatarFrame: currentProfile.avatarFrame || "",
+      isSubstitute: mainPlayerCount >= maxPlayers,
+    };
+    state.players.push(player);
+  }
+  currentUserId = player.id;
+  localStorage.setItem(SESSION_KEY, currentUserId);
+  render();
+}
+
+function completeEntryOnHome() {
+  quickEnterCurrentProfile();
+  go("home");
+  showEntryCompleteCue();
+}
+
+function showEntryCompleteCue() {
+  showToast("エントリー完了", "右上のマイページから、チェックインや自分のテーブルを確認できます。");
+  els.myPageTopBtn.classList.add("attention");
+}
+
+function showToast(title, text) {
+  els.entryCompleteToast.querySelector("strong").textContent = title;
+  els.entryCompleteToast.querySelector("span").textContent = text;
+  els.entryCompleteToast.classList.remove("hidden");
+  els.entryCompleteToast.classList.add("show");
+  clearTimeout(showEntryCompleteCue.timer);
+  showEntryCompleteCue.timer = setTimeout(() => {
+    els.entryCompleteToast.classList.remove("show");
+    els.myPageTopBtn.classList.remove("attention");
+    setTimeout(() => els.entryCompleteToast.classList.add("hidden"), 220);
+  }, 3600);
+}
+
+function requestEntryWithNotice() {
+  if (!currentProfile) {
+    go("opening");
+    return;
+  }
+  if (getPlayer(currentUserId)) {
+    go("mypage");
+    return;
+  }
+  renderEntryNoticeTimeline();
+  els.entryTimelineConfirm.checked = false;
+  els.entryNoticeAgreeBtn.disabled = true;
+  els.entryNoticeDialog.showModal();
+}
+
+function acceptEntryNotice() {
+  if (!els.entryTimelineConfirm.checked) {
+    alert("大会タイムラインを確認してからエントリーしてください。");
+    return;
+  }
+  els.entryNoticeDialog.close();
+  completeEntryOnHome();
+}
+
+function checkInWindowState() {
+  if (!hasTournament()) return { state: "unset", message: "現在開催予定の大会はありません。" };
+  if (!state.tournament.startAt) return { state: "unset", message: "開始日時が未設定のため、チェックインはまだ使えません。" };
+  const start = new Date(state.tournament.startAt).getTime();
+  const now = Date.now();
+  const open = start - 30 * 60 * 1000;
+  const close = start;
+  if (now < open) return { state: "early", message: `チェックインは大会当日の開始30分前から開始時刻までです。受付開始: ${formatStartAt(new Date(open).toISOString())}` };
+  if (now > close) return { state: "closed", message: "チェックイン時間は終了しました。" };
+  if (state.tournament.status !== "checkin") return { state: "closed", message: "チェックイン受付中ではありません。" };
+  return { state: "open", message: "チェックイン受付中です。" };
+}
+
+function performCheckIn() {
+  const user = getPlayer(currentUserId);
+  if (!user) return;
+  const windowState = checkInWindowState();
+  if (windowState.state !== "open") {
+    alert(windowState.message);
+    return;
+  }
+  user.checkedInAt = new Date().toISOString();
+  if (els.checkInDialog.open) els.checkInDialog.close();
+  render();
+}
+
+function maybeShowCheckInDialog() {
+  const user = getPlayer(currentUserId);
+  if (!user || user.checkedInAt || els.checkInDialog.open) return;
+  if (checkInWindowState().state !== "open") return;
+  const key = `tftrise-checkin-popup-${state.activeTournamentId}-${user.id}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "1");
+  setTimeout(() => els.checkInDialog.showModal(), 150);
+}
+
+function renderMyLobbies(playerId) {
+  const entries = [];
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    (state.lobbies[blockIndex] || []).forEach((lobby, lobbyIndex) => {
+      if (!lobby.includes(playerId)) return;
+      entries.push({ block, lobby, lobbyIndex });
+    });
+  });
+
+  if (!entries.length) {
+    els.myLobbyOutput.innerHTML = `<div class="empty-state">まだロビーが生成されていません。</div>`;
+    return;
+  }
+
+  els.myLobbyOutput.innerHTML = `
+    <h3>自分のテーブル</h3>
+    <div class="my-lobby-tournament">
+      <span>大会</span>
+      <strong>${escapeHtml(state.tournament?.name || "大会未設定")}</strong>
+      <small>${escapeHtml(statusLabel(state.tournament?.status || "entry"))} / ${escapeHtml(formatStartAt(state.tournament?.startAt))}</small>
+    </div>
+  `;
+  entries.forEach((entry) => {
+    const card = document.createElement("section");
+    card.className = "my-lobby-card";
+    const hostId = state.lobbyHosts?.[getBlockIndex(entry.block.games[0])]?.[entry.lobbyIndex];
+    const isHost = hostId === playerId;
+    if (isHost) card.classList.add("is-host");
+    card.innerHTML = `
+      <div class="my-lobby-head">
+        <span>対象試合 Game ${entry.block.games.join("・")}</span>
+        <strong>あなたは Lobby ${entry.lobbyIndex + 1}</strong>
+      </div>
+      <div class="host-line ${isHost ? "is-me" : ""}">
+        ${isHost ? "あなたがテーブルの開設者です。テーブル作成をお願いします。" : `テーブル開設者: ${escapeHtml(getPlayer(hostId)?.displayName || "未割り当て")}`}
+        <button class="secondary-button lobby-guide-button" type="button">テーブルの作り方</button>
+      </div>
+    `;
+    const ol = document.createElement("ol");
+    entry.lobby.forEach((id) => {
+      const player = getPlayer(id);
+      const li = document.createElement("li");
+      li.className = id === playerId ? "is-me" : "";
+      li.innerHTML = player
+        ? playerRiotCopyMarkup(player)
+        : `<span>削除済み</span>`;
+      ol.append(li);
+    });
+    card.append(ol);
+    els.myLobbyOutput.append(card);
+  });
+}
+
+function findCurrentLobbyEntry(playerId) {
+  for (const [blockIndex, block] of getLobbyBlocks().entries()) {
+    const lobbies = state.lobbies[blockIndex] || [];
+    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
+    if (lobbyIndex >= 0) return { block, lobby: lobbies[lobbyIndex], lobbyIndex };
+  }
+  return null;
+}
+
+function maybeShowHostDialog(playerId) {
+  const assignments = [];
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    (state.lobbyHosts?.[blockIndex] || []).forEach((hostId, lobbyIndex) => {
+      if (hostId === playerId) assignments.push({ block, lobbyIndex });
+    });
+  });
+  if (!assignments.length || els.hostDialog.open) return;
+  const key = `tftrise-host-popup-${playerId}-${assignments.map((item) => `${item.block.games.join("-")}-${item.lobbyIndex}`).join("_")}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "1");
+  const first = assignments[0];
+  els.hostDialogText.textContent = `対象試合 Game ${first.block.games.join("・")} / Lobby ${first.lobbyIndex + 1} のテーブル作成をお願いします。`;
+  setTimeout(() => els.hostDialog.showModal(), 100);
+}
+
+function renderMyHistory(history) {
+  els.myHistoryOutput.innerHTML = `
+    <h3>成績</h3>
+    <div class="history">${history.map((placement) => `<span>${placement || "-"}</span>`).join("")}</div>
+  `;
+}
+
+function renderManualFallback() {
+  const lobby = getSelectedLobby();
+  els.manualFallbackRows.innerHTML = "";
+  if (!lobby.length) {
+    els.manualFallbackRows.innerHTML = `<div class="empty-state">管理者がロビーを生成すると入力できます。</div>`;
+    return;
+  }
+
+  lobby.forEach((playerId) => {
+    const player = getPlayer(playerId);
+    if (!player) return;
+    const row = document.createElement("label");
+    row.className = "manual-row";
+    row.innerHTML = `
+      <span class="player-meta"><strong>${escapeHtml(player.displayName)}</strong><span>${escapeHtml(player.discordId)}</span></span>
+    `;
+    const select = document.createElement("select");
+    select.dataset.player = player.id;
+    select.innerHTML = els.placementTemplate.innerHTML;
+    row.append(select);
+    els.manualFallbackRows.append(row);
+  });
+}
+
+function renderAdmin() {
+  renderTournamentList();
+  renderTournamentForm();
+  renderPlayersTable();
+  renderLobbyGenerateButtons();
+  renderLobbies();
+  renderAdminResults();
+  renderStandings();
+}
+
+function renderTournamentList() {
+  els.tournamentList.innerHTML = "";
+  if (!state.tournaments.length) {
+    els.tournamentList.innerHTML = `<div class="empty-state">まだ大会は作成されていません。「新しい大会を作成」から開催準備を始めてください。</div>`;
+    return;
+  }
+  state.tournaments.forEach((item) => {
+    const button = document.createElement("button");
+    button.className = `tournament-list-item ${item.id === state.activeTournamentId ? "active" : ""}`;
+    button.type = "button";
+    button.dataset.id = item.id;
+    button.innerHTML = `
+      <strong>${escapeHtml(item.tournament.name || "無題の大会")}</strong>
+      <span>${statusLabel(item.tournament.status)} / ${formatStartAt(item.tournament.startAt)}</span>
+    `;
+    els.tournamentList.append(button);
+  });
+}
+
+function renderTournamentForm() {
+  if (!hasTournament()) {
+    els.tournamentName.value = "";
+    els.tournamentStart.value = "";
+    els.tournamentStatus.value = "entry";
+    els.tournamentFormatType.value = "sixGame";
+    els.tournamentMaxPlayers.value = 256;
+    els.tournamentLobbyRule.value = "every2Games";
+    els.formatStages.innerHTML = `<div class="empty-state">編集する大会がありません。</div>`;
+    return;
+  }
+  els.tournamentName.value = state.tournament.name || "";
+  els.tournamentStart.value = state.tournament.startAt || "";
+  els.tournamentStatus.value = state.tournament.status === "upcoming" ? "entry" : state.tournament.status || "entry";
+  els.tournamentFormatType.value = state.tournament.formatType === "openSwiss" ? "sixGame" : state.tournament.formatType || "sixGame";
+  els.tournamentMaxPlayers.value = state.tournament.maxPlayers || 256;
+  els.tournamentLobbyRule.value = state.tournament.lobbyRule || defaultLobbyRuleForFormat(state.tournament.formatType);
+  renderFormatStages();
+}
+
+function setTournamentStatus(status) {
+  if (!hasTournament()) {
+    alert("先に大会を作成してください。");
+    return;
+  }
+  if (status === "live" && !confirm("チェックイン状況を確認しましたか？\n大会を開始すると最初のロビーだけ自動生成され、ユーザー側にテーブル情報が表示されます。")) return;
+  if (status === "live" && !getLobbyPlayerPool().length) {
+    alert("参加者がいないためロビーを生成できません。エントリーまたはチェックイン状況を確認してください。");
+    return;
+  }
+  state.tournament.status = status;
+  if (status === "live") generateNextLobbyBlock({ silent: true });
+  render();
+  go("home");
+}
+
+function renderFormatStages() {
+  const stages = state.tournament?.stages?.length ? state.tournament.stages : defaultStages();
+  els.formatStages.innerHTML = "";
+  stages.forEach((stage, index) => {
+    const row = document.createElement("div");
+    row.className = "stage-row";
+    row.innerHTML = `
+      <label>ステージ名<input class="stage-name" data-index="${index}" value="${escapeHtml(stage.name || "")}" placeholder="例: Day1 / Round of 256" /></label>
+      <label>詳細<input class="stage-detail" data-index="${index}" value="${escapeHtml(stage.detail || "")}" placeholder="例: 256名 → 128名 / 6戦" /></label>
+      <button class="danger-button remove-stage" type="button" data-index="${index}">削除</button>
+    `;
+    els.formatStages.append(row);
+  });
+}
+
+function renderPlayersTable() {
+  els.playersTable.innerHTML = "";
+  if (!state.players.length) {
+    els.playersTable.innerHTML = `<tr><td colspan="5">まだ参加者が登録されていません。</td></tr>`;
+    return;
+  }
+
+  state.players.forEach((player) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><button class="sub-toggle ${player.isSubstitute ? "is-sub" : ""}" type="button" data-id="${player.id}">${player.isSubstitute ? "補欠" : "参加"}</button></td>
+      <td><strong>${escapeHtml(player.displayName)}</strong></td>
+      <td>${escapeHtml(player.riotId || "-")}</td>
+      <td>${escapeHtml(player.discordId)}</td>
+      <td>${escapeHtml(player.xAccount || "-")}</td>
+      <td><button class="remove-player" type="button" data-id="${player.id}">×</button></td>
+    `;
+    els.playersTable.append(row);
+  });
+}
+
+function renderLobbyGenerateButtons() {
+  const blocks = getLobbyBlocks();
+  els.blockActions.innerHTML = blocks
+    .map((block, index) => `<button class="secondary-button generate-block" data-block="${index}" type="button">Game ${block.games.join("-")} 再生成</button>`)
+    .join("");
+}
+
+function renderLobbies() {
+  els.lobbyOutput.innerHTML = "";
+  if (!state.players.length) {
+    els.lobbyOutput.innerHTML = `<div class="empty-state">参加者登録後に生成できます。</div>`;
+    return;
+  }
+
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    const lobbies = state.lobbies[blockIndex] || [];
+    const section = document.createElement("section");
+    section.className = "lobby";
+    section.innerHTML = `<h4>${block.label} / Game ${block.games.join("・")}</h4>`;
+    if (!lobbies.length) {
+      section.insertAdjacentHTML("beforeend", `<p>未生成</p>`);
+    } else {
+      lobbies.forEach((lobby, lobbyIndex) => {
+        section.insertAdjacentHTML("beforeend", `<p>Lobby ${lobbyIndex + 1}</p>`);
+        const ol = document.createElement("ol");
+        lobby.forEach((playerId) => {
+          const li = document.createElement("li");
+          const player = getPlayer(playerId);
+          li.textContent = player ? `${summonerName(player.riotId) || player.displayName} #${riotTag(player.riotId)}` : "削除済み";
+          ol.append(li);
+        });
+        section.append(ol);
+      });
+    }
+    els.lobbyOutput.append(section);
+  });
+}
+
+function renderAdminResults() {
+  els.adminResultsOutput.innerHTML = "";
+  const history = document.createElement("section");
+  history.className = "report-history";
+  history.innerHTML = `<h4>提出履歴</h4>`;
+  if (!state.reports.length) {
+    history.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ結果報告はありません。</div>`);
+  } else {
+    state.reports.slice(0, 12).forEach((report) => {
+      const submitter = report.submitter || {};
+      const winner = getPlayer(report.winnerId);
+      const item = document.createElement("article");
+      item.className = "report-history-item";
+      item.innerHTML = `
+        <div>
+          <strong>Game ${report.game} / Lobby ${report.lobby}</strong>
+          <span>${report.method === "image" ? "スクリーンショット提出" : "手動提出"} / ${formatReportTime(report.submittedAt)}</span>
+        </div>
+        <div>
+          <span>提出者</span>
+          <strong>${escapeHtml(submitter.displayName || "不明")}</strong>
+          <small>${escapeHtml([submitter.riotId, submitter.discordId].filter(Boolean).join(" / ") || "-")}</small>
+        </div>
+        <div>
+          <span>提出アカウント</span>
+          <strong>${escapeHtml(winner?.displayName || "未選択")}</strong>
+        </div>
+      `;
+      history.append(item);
+    });
+  }
+  els.adminResultsOutput.append(history);
+
+  [1, 2, 3, 4, 5, 6].forEach((gameNo) => {
+    const blockIndex = getBlockIndex(gameNo);
+    const lobbies = state.lobbies[blockIndex] || [];
+    const card = document.createElement("section");
+    card.className = "lobby";
+    card.innerHTML = `<h4>Game ${gameNo}</h4>`;
+
+    if (!lobbies.length) {
+      card.insertAdjacentHTML("beforeend", `<p>ロビー未生成</p>`);
+    } else {
+      lobbies.forEach((lobby, lobbyIndex) => {
+        card.insertAdjacentHTML("beforeend", `<p>Lobby ${lobbyIndex + 1}</p>`);
+        lobby.forEach((playerId) => {
+          const player = getPlayer(playerId);
+          if (!player) return;
+          const row = document.createElement("label");
+          row.className = "result-row";
+          row.innerHTML = `<span class="player-meta"><strong>${escapeHtml(player.displayName)}</strong><span>${escapeHtml(player.discordId)}</span></span>`;
+          const select = document.createElement("select");
+          select.dataset.game = String(gameNo);
+          select.dataset.player = player.id;
+          select.innerHTML = els.placementTemplate.innerHTML;
+          select.value = state.results[gameNo]?.[player.id] || "";
+          row.append(select);
+          card.append(row);
+        });
+      });
+    }
+
+    els.adminResultsOutput.append(card);
+  });
+}
+
+function renderStandings() {
+  const standings = calculateStandings();
+  els.standingsTable.innerHTML = "";
+  if (!standings.length) {
+    els.standingsTable.innerHTML = `<tr><td colspan="7">結果入力後に表示されます。</td></tr>`;
+    return;
+  }
+
+  standings.forEach((row, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${index + 1}</strong></td>
+      <td><div class="player-meta"><strong>${escapeHtml(row.player.displayName)}</strong><span>${escapeHtml(row.player.discordId)}</span></div></td>
+      <td><strong>${row.points}</strong></td>
+      <td>${row.average ? row.average.toFixed(2) : "-"}</td>
+      <td>${row.firstRate ? `${Math.round(row.firstRate * 100)}%` : "-"}</td>
+      <td>${row.top4Rate ? `${Math.round(row.top4Rate * 100)}%` : "-"}</td>
+      <td><div class="history">${row.history.map((placement) => `<span>${placement || "-"}</span>`).join("")}</div></td>
+    `;
+    els.standingsTable.append(tr);
+  });
+}
+
+async function analyzeReportImage() {
+  const lobby = getSelectedLobby();
+  if (!lobby.length) return setReportStatus("あなたの現在の報告対象ロビーがありません。ロビー生成後、または未報告の試合がある場合に提出できます。");
+  if (!selectedReportFile) return setReportStatus("先にスクリーンショットを選択してください。");
+  if (!window.Tesseract) return setReportStatus("OCRを読み込めませんでした。画像提出できない場合は手動報告を使ってください。");
+
+  setReportStatus("画像解析中... 0%");
+  const { data } = await Tesseract.recognize(selectedReportFile, "eng+jpn", {
+    logger: (progress) => {
+      if (progress.status === "recognizing text") {
+        setReportStatus(`画像解析中... ${Math.round(progress.progress * 100)}%`);
+      }
+    },
+  });
+  latestReportMatches = matchOcrToPlayers(data.text || "", lobby);
+  renderReportMatches();
+  if (latestReportMatches.length < 2) {
+    setReportStatus("十分に認識できませんでした。画像が提出できない場合のみ手動報告を使ってください。");
+  } else {
+    setReportStatus(`${latestReportMatches.length}人を認識しました。内容確認後に報告してください。`);
+  }
+}
+
+function submitOcrReport() {
+  if (!latestReportMatches.length) return setReportStatus("認識結果がありません。先に画像認識してください。");
+  const gameNo = els.reportGame.value;
+  if (!gameNo) return setReportStatus("あなたの現在の報告対象ロビーがありません。");
+  state.results[gameNo] = state.results[gameNo] || {};
+  latestReportMatches.forEach((match) => {
+    state.results[gameNo][match.playerId] = String(match.placement);
+  });
+  addReport("image", latestReportMatches);
+  maybeFinishTournamentAutomatically();
+  maybeGenerateNextLobbyBlock();
+  setReportStatus("報告を受け付けました。必要があれば管理者が修正します。");
+  render();
+}
+
+function submitManualReport() {
+  const gameNo = els.reportGame.value;
+  if (!gameNo) return setReportStatus("あなたの現在の報告対象ロビーがありません。");
+  const rows = [...els.manualFallbackRows.querySelectorAll("select")];
+  const matches = rows
+    .map((select) => ({ playerId: select.dataset.player, placement: Number(select.value), confidence: 1 }))
+    .filter((match) => match.placement);
+  if (!matches.length) return setReportStatus("手動報告の着順が未入力です。");
+
+  state.results[gameNo] = state.results[gameNo] || {};
+  matches.forEach((match) => {
+    state.results[gameNo][match.playerId] = String(match.placement);
+  });
+  addReport("manual", matches);
+  maybeFinishTournamentAutomatically();
+  maybeGenerateNextLobbyBlock();
+  setReportStatus("手動報告を受け付けました。");
+  render();
+}
+
+function addReport(method, matches) {
+  const submitterPlayer = getPlayer(currentUserId);
+  const submitterProfile = submitterPlayer || currentProfile || {};
+  const target = getCurrentReportTarget();
+  state.reports.unshift({
+    id: uid(),
+    method,
+    game: target?.game || Number(els.reportGame.value),
+    lobby: target ? target.lobbyIndex + 1 : Number(els.reportLobby.value) + 1,
+    winnerId: currentUserId || "",
+    submitter: {
+      id: currentUserId || "",
+      displayName: submitterProfile.displayName || "",
+      riotId: submitterProfile.riotId || "",
+      discordId: submitterProfile.discordId || "",
+      xAccount: submitterProfile.xAccount || "",
+    },
+    submittedAt: new Date().toISOString(),
+    matches,
+  });
+}
+
+function formatReportTime(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function renderReportMatches() {
+  els.reportMatches.innerHTML = "";
+  latestReportMatches.forEach((match) => {
+    const player = getPlayer(match.playerId);
+    const li = document.createElement("li");
+    li.textContent = `${match.placement}位: ${player?.displayName || "不明"} (${Math.round(match.confidence * 100)}%)`;
+    els.reportMatches.append(li);
+  });
+}
+
+function setReportStatus(message) {
+  els.reportStatus.textContent = message;
+}
+
+function readStageRows() {
+  return [...els.formatStages.querySelectorAll(".stage-row")]
+    .map((row) => ({
+      name: row.querySelector(".stage-name").value.trim(),
+      detail: row.querySelector(".stage-detail").value.trim(),
+    }))
+    .filter((stage) => stage.name || stage.detail);
+}
+
+function getLobbyPlayerPool() {
+  const mainPlayers = state.players.filter((player) => !player.isSubstitute);
+  const checkedInPlayers = mainPlayers.filter((player) => player.checkedInAt);
+  return checkedInPlayers.length ? checkedInPlayers : mainPlayers;
+}
+
+function isBlockComplete(blockIndex) {
+  const block = getLobbyBlocks()[blockIndex];
+  const lobbies = state.lobbies?.[blockIndex] || [];
+  if (!block || !lobbies.length) return false;
+  return block.games.every((gameNo) => lobbies.every((lobby) => {
+    const results = state.results[gameNo] || {};
+    return lobby.length && lobby.every((playerId) => results[playerId]);
+  }));
+}
+
+function nextLobbyBlockIndex() {
+  const blocks = getLobbyBlocks();
+  for (let index = 0; index < blocks.length; index += 1) {
+    if (!(state.lobbies?.[index] || []).length) return index;
+    if (!isBlockComplete(index)) return -1;
+  }
+  return -1;
+}
+
+function buildLobbiesForBlock(blockIndex) {
+  if (!state.players.length) return;
+  const blocks = getLobbyBlocks();
+  const block = blocks[blockIndex];
+  if (!block) return;
+  state.lobbies = state.lobbies || [];
+  state.lobbyHosts = state.lobbyHosts || [];
+  const shuffled = shuffle(getLobbyPlayerPool().map((player) => player.id));
+  if (!shuffled.length) return;
+  const lobbyCount = Math.max(1, Math.ceil(shuffled.length / 8));
+  const lobbies = Array.from({ length: lobbyCount }, () => []);
+  shuffled.forEach((playerId, index) => lobbies[index % lobbyCount].push(playerId));
+  state.lobbies[blockIndex] = lobbies;
+  state.lobbyHosts[blockIndex] = lobbies.map((lobby) => shuffle(lobby)[0] || "");
+  block.games.forEach((gameNo) => { state.results[gameNo] = {}; });
+}
+
+function generateBlock(blockIndex) {
+  buildLobbiesForBlock(blockIndex);
+  render();
+}
+
+function generateAllLobbies({ silent = false } = {}) {
+  generateNextLobbyBlock({ silent });
+}
+
+function generateNextLobbyBlock({ silent = false } = {}) {
+  const index = nextLobbyBlockIndex();
+  if (index < 0) return false;
+  buildLobbiesForBlock(index);
+  if (!silent) render();
+  return true;
+}
+
+function maybeGenerateNextLobbyBlock() {
+  if (state.tournament?.status !== "live") return;
+  generateNextLobbyBlock({ silent: true });
+}
+
+function seed256Players() {
+  const testPlayers = [];
+  for (let i = 1; i <= 256; i += 1) {
+    const number = String(i).padStart(3, "0");
+    const displayName = `TestPlayer${number}`;
+    testPlayers.push({
+      id: uid(),
+      displayName,
+      riotId: `TestPlayer${number}#JP1`,
+      discordId: `@testplayer${number}`,
+      xAccount: `@tft_test_${number}`,
+      isSubstitute: false,
+    });
+  }
+  state.players = testPlayers;
+  state.lobbies = [];
+  state.lobbyHosts = [];
+  state.results = {};
+  state.reports = [];
+  render();
+}
+
+function updateAdminResult(gameNo, playerId, placement) {
+  state.results[gameNo] = state.results[gameNo] || {};
+  if (placement) state.results[gameNo][playerId] = placement;
+  else delete state.results[gameNo][playerId];
+  maybeFinishTournamentAutomatically();
+  maybeGenerateNextLobbyBlock();
+  renderStandings();
+  renderHome();
+  saveState();
+}
+
+function calculateStandings() {
+  return calculateTournamentStandings(state);
+}
+
+function calculateTournamentStandings(tournamentState) {
+  const players = tournamentState.players || [];
+  const results = tournamentState.results || {};
+  return players
+    .map((player) => {
+      const history = [1, 2, 3, 4, 5, 6].map((gameNo) => Number(results[gameNo]?.[player.id] || 0));
+      const played = history.filter(Boolean);
+      const points = played.reduce((sum, placement) => sum + scoreForPlacement(placement), 0);
+      const firsts = played.filter((placement) => placement === 1).length;
+      const top4 = played.filter((placement) => placement >= 1 && placement <= 4).length;
+      const firstRate = played.length ? firsts / played.length : 0;
+      const top4Rate = played.length ? top4 / played.length : 0;
+      const average = played.length ? played.reduce((sum, placement) => sum + placement, 0) / played.length : 0;
+      const finalPlacement = history.slice().reverse().find(Boolean) || 99;
+      return { player, history, points, firsts, firstRate, top4, top4Rate, average, finalPlacement };
+    })
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.firstRate - a.firstRate ||
+      b.firsts - a.firsts ||
+      b.top4Rate - a.top4Rate ||
+      a.average - b.average ||
+      a.finalPlacement - b.finalPlacement ||
+      a.player.displayName.localeCompare(b.player.displayName, "ja")
+    );
+}
+
+function countCompletedGames() {
+  const mainPlayers = state.players.filter((player) => !player.isSubstitute);
+  return [1, 2, 3, 4, 5, 6].filter((gameNo) => {
+    const values = Object.values(state.results[gameNo] || {}).filter(Boolean);
+    return values.length === mainPlayers.length && values.length > 0;
+  }).length;
+}
+
+function maybeFinishTournamentAutomatically() {
+  if (state.tournament?.status !== "live") return;
+  if (countCompletedGames() === 6) state.tournament.status = "finished";
+}
+
+function matchOcrToPlayers(text, lobby) {
+  const lines = text.split(/\n+/).map(normalize).filter((line) => line.length >= 2);
+  const matches = [];
+  const used = new Set();
+  for (const line of lines) {
+    const best = lobby
+      .map((id) => getPlayer(id))
+      .filter(Boolean)
+      .filter((player) => !used.has(player.id))
+      .map((player) => ({
+        player,
+        score: Math.max(
+          similarity(line, normalize(player.displayName)),
+          similarity(line, normalize(player.riotId || "")),
+          similarity(line, normalize((player.riotId || "").split("#")[0] || ""))
+        ),
+      }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (best && best.score >= 0.46) {
+      used.add(best.player.id);
+      matches.push({ playerId: best.player.id, placement: matches.length + 1, confidence: best.score });
+    }
+    if (matches.length === lobby.length) break;
+  }
+  return matches;
+}
+
+function getSelectedLobby() {
+  const target = getCurrentReportTarget();
+  if (target) return target.lobby;
+  const blockIndex = getBlockIndex(Number(els.reportGame.value));
+  return (state.lobbies[blockIndex] || [])[Number(els.reportLobby.value)] || [];
+}
+
+function getBlockIndex(gameNo) {
+  const index = getLobbyBlocks().findIndex((block) => block.games.includes(gameNo));
+  return index >= 0 ? index : Math.floor((gameNo - 1) / 2);
+}
+
+function getLobbyRule() {
+  return state.tournament?.lobbyRule || defaultLobbyRuleForFormat(state.tournament?.formatType);
+}
+
+function summonerName(riotId = "") {
+  return String(riotId).split("#")[0].trim();
+}
+
+function riotTag(riotId = "") {
+  const parts = String(riotId).split("#");
+  return (parts[1] || "").trim();
+}
+
+function playerRiotCopyMarkup(player) {
+  const name = summonerName(player.riotId) || player.displayName || "";
+  const tag = riotTag(player.riotId);
+  return `
+    <div class="riot-id-card">
+      <div class="riot-id-main">
+        <span>${escapeHtml(name)}</span>
+        <small>${tag ? `#${escapeHtml(tag)}` : "#-"}</small>
+      </div>
+      <div class="riot-copy-actions">
+        <button type="button" data-copy-value="${escapeHtml(name)}" data-copy-label="サモナーネーム">名前コピー</button>
+        <button type="button" data-copy-value="${escapeHtml(tag)}" data-copy-label="タグ">タグコピー</button>
+      </div>
+    </div>
+  `;
+}
+
+function playerRiotDisplayMarkup(player) {
+  const name = summonerName(player.riotId) || player.displayName || "";
+  const tag = riotTag(player.riotId);
+  return `
+    <div class="riot-id-card is-display-only">
+      <div class="riot-id-main">
+        <span>${escapeHtml(name)}</span>
+        <small>${tag ? `#${escapeHtml(tag)}` : "#-"}</small>
+      </div>
+    </div>
+  `;
+}
+
+function defaultLobbyRuleForFormat(formatType) {
+  return formatType === "oneDayElim" ? "everyGame" : "every2Games";
+}
+
+function getLobbyBlocks() {
+  if (getLobbyRule() === "everyGame") {
+    return [1, 2, 3, 4, 5, 6].map((game) => ({ label: `Game ${game}`, games: [game] }));
+  }
+  return [
+    { label: "Game 1-2", games: [1, 2] },
+    { label: "Game 3-4", games: [3, 4] },
+    { label: "Game 5-6", games: [5, 6] },
+  ];
+}
+
+function getPlayer(id) {
+  return state.players.find((player) => player.id === id);
+}
+
+function formatStartAt(value) {
+  if (!value) return "未設定";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未設定";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function statusLabel(status) {
+  return {
+    entry: "エントリー受付中",
+    checkin: "チェックイン受付中",
+    ready: "開始確認待ち",
+    live: "開催中",
+    finished: "終了",
+  }[status === "upcoming" ? "entry" : status] || "エントリー受付中";
+}
+
+function statusMessage(status) {
+  return {
+    entry: "この大会は現在、参加者募集中です。",
+    checkin: "この大会は現在、チェックイン受付中です。",
+    ready: "チェックイン受付は終了しました。運営の開始確認待ちです。",
+    live: "この大会は現在進行中です。",
+    finished: "この大会は終了しています。",
+  }[status === "upcoming" ? "entry" : status] || "この大会は現在、参加者募集中です。";
+}
+
+function formatTypeLabel(type) {
+  return {
+    sixGame: "6戦総合pt式",
+    oneDayElim: "1日完結型（鰹節杯ルール）256→決勝",
+    multiDay: "TPC式 Day1 / Day2 / 決勝",
+    custom: "カスタム",
+  }[type] || "6戦総合pt式";
+}
+
+function lobbyRuleLabel(type) {
+  return {
+    everyGame: "毎試合抽選",
+    every2Games: "2試合ごとに抽選",
+  }[type] || "2試合ごとに抽選";
+}
+
+function formatTemplate(type) {
+  if (type === "sixGame" || type === "openSwiss") {
+    return [
+      { name: "参加規模", detail: "8〜256人で開催。参加者を8人ロビーに分けて進行。" },
+      { name: "Game 1-2", detail: "初回抽選ロビーで2戦実施。" },
+      { name: "Game 3-4", detail: "全参加者を再抽選して2戦実施。" },
+      { name: "Game 5-6", detail: "全参加者を再抽選して2戦実施。" },
+      { name: "最終順位", detail: "6戦の合計ポイントで総合順位を決定。上位者は上位大会への出場権を獲得できる。" },
+    ];
+  }
+  if (type === "oneDayElim") {
+    return [
+      { name: "Round of 256", detail: "256名で開始。ラウンド開始時に全ロビーを抽選し、各ロビー上位が次ラウンドへ進出。" },
+      { name: "Round of 128", detail: "進出者128名でロビーを再抽選し、64名へ絞り込み。" },
+      { name: "Round of 64", detail: "進出者64名でロビーを再抽選し、32名へ絞り込み。" },
+      { name: "Round of 32", detail: "進出者32名でロビーを再抽選し、16名へ絞り込み。" },
+      { name: "Round of 16", detail: "進出者16名でロビーを再抽選し、決勝進出者を決定。" },
+      { name: "決勝", detail: "決勝進出者で最終ロビーを作成し、最終順位を決定。" },
+    ];
+  }
+  if (type === "multiDay") {
+    return [
+      { name: "Day 1 / 32→24", detail: "32人4ロビーで6試合。2試合ごとにロビーを再抽選し、下位8人をカット。上位24人がDay 2へ進出。" },
+      { name: "Day 2 / 24→8", detail: "Match 1-2は3ロビーで下位8人をカット。Match 3-4は2ロビーで下位4人をカット。Match 5-6は1ロビーで下位4人をカットし、上位8人がDay 3決勝へ進出。" },
+      { name: "Day 3 / 決勝", detail: "8人1ロビーでチェックメイト20pt方式。20ptに到達した選手が、その後の試合で1位を取った時点で優勝。" },
+      { name: "決勝順位", detail: "優勝者確定後、残りの順位は最終スタンディングに基づいて確定。" },
+    ];
+  }
+  return [
+    { name: "予選", detail: "全6戦。2戦ごとにロビーを再抽選し、合計ポイントで総合順位を決定。" },
+  ];
+}
+function shuffle(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function normalize(value) {
+  return String(value).toLowerCase().normalize("NFKC").replace(/[#＃].*$/, "").replace(/[^a-z0-9ぁ-んァ-ン一-龥]/g, "");
+}
+
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  if (a.includes(b) || b.includes(a)) return Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  const distance = levenshtein(a, b);
+  return 1 - distance / Math.max(a.length, b.length);
+}
+
+function levenshtein(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function escapeHtml(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+document.querySelectorAll("[data-go]").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    go(button.dataset.go);
+  });
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy-value]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const value = button.dataset.copyValue || "";
+  if (!value) return;
+  const label = button.dataset.copyLabel || "テキスト";
+  const original = button.textContent;
+  const copied = await copyText(value);
+  if (copied) {
+    button.textContent = "コピー済み";
+    showToast("コピーしました", `${label}: ${value}`);
+    setTimeout(() => { button.textContent = original; }, 1200);
+    return;
+  }
+  showToast("コピーできませんでした", "表示された文字を手動でコピーしてください。");
+  prompt("コピーしてください", value);
+});
+
+async function copyText(value) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {}
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.append(input);
+  input.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    input.remove();
+  }
+}
+
+document.querySelectorAll(".auth-mode").forEach((button) => {
+  button.addEventListener("click", () => {
+    authMode = button.dataset.authMode;
+    renderAuthMode();
+  });
+});
+
+els.tournamentCard.addEventListener("click", (event) => {
+  if (event.target.closest("[data-go]")) return;
+  els.tournamentDialog.showModal();
+});
+
+els.tournamentCard.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  els.tournamentDialog.showModal();
+});
+
+els.dialogCloseBtn.addEventListener("click", () => els.tournamentDialog.close());
+
+els.tournamentDialog.addEventListener("click", (event) => {
+  if (event.target === els.tournamentDialog) els.tournamentDialog.close();
+});
+
+els.dialogEntryBtn.addEventListener("click", () => {
+  els.tournamentDialog.close();
+  if (getPlayer(currentUserId)) {
+    go("mypage");
+    return;
+  }
+  requestEntryWithNotice();
+});
+
+els.dialogReportBtn.addEventListener("click", () => {
+  els.tournamentDialog.close();
+  go("report");
+});
+
+els.homeEntryBtn.addEventListener("click", () => {
+  requestEntryWithNotice();
+});
+
+els.entryNoticeAgreeBtn.addEventListener("click", acceptEntryNotice);
+els.entryNoticeCancelBtn.addEventListener("click", () => els.entryNoticeDialog.close());
+els.entryTimelineConfirm.addEventListener("change", () => {
+  els.entryNoticeAgreeBtn.disabled = !els.entryTimelineConfirm.checked;
+});
+els.entryNoticeDialog.addEventListener("click", (event) => {
+  if (event.target === els.entryNoticeDialog) els.entryNoticeDialog.close();
+});
+
+els.dialogDetailToggle.addEventListener("click", () => {
+  const isHidden = els.publicFormatDetails.classList.toggle("hidden");
+  if (!isHidden) {
+    els.publicTimelineDetails.classList.add("hidden");
+    els.dialogTimelineToggle.textContent = "タイムライン";
+  }
+  els.dialogDetailToggle.textContent = isHidden ? "大会詳細" : "詳細を閉じる";
+});
+
+els.dialogTimelineToggle.addEventListener("click", () => {
+  const isHidden = els.publicTimelineDetails.classList.toggle("hidden");
+  if (!isHidden) {
+    els.publicFormatDetails.classList.add("hidden");
+    els.dialogDetailToggle.textContent = "大会詳細";
+  }
+  els.dialogTimelineToggle.textContent = isHidden ? "タイムライン" : "タイムラインを閉じる";
+});
+
+els.hostDialogCloseBtn.addEventListener("click", () => els.hostDialog.close());
+els.openLobbyGuideBtn.addEventListener("click", () => els.lobbyGuideDialog.showModal());
+els.guideCloseBtn.addEventListener("click", () => els.lobbyGuideDialog.close());
+els.lobbyGuideDialog.addEventListener("click", (event) => {
+  if (event.target === els.lobbyGuideDialog) els.lobbyGuideDialog.close();
+});
+
+els.myLobbyOutput.addEventListener("click", (event) => {
+  if (!event.target.closest(".lobby-guide-button")) return;
+  els.lobbyGuideDialog.showModal();
+});
+
+window.addEventListener("hashchange", () => {
+  const target = location.hash.replace("#", "") || "home";
+  if (document.getElementById(target)) go(target);
+});
+
+els.adminOpenBtn.addEventListener("click", () => go("admin"));
+els.logoutTopBtn.addEventListener("click", () => {
+  currentUserId = "";
+  currentProfile = null;
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(PROFILE_KEY);
+  render();
+  go("opening");
+});
+els.myEntryActions.addEventListener("click", (event) => {
+  if (!event.target.closest(".cancel-entry-button")) return;
+  cancelCurrentEntry();
+});
+els.myNextAction.addEventListener("click", (event) => {
+  const checkIn = event.target.closest(".check-in-now");
+  if (checkIn) {
+    performCheckIn();
+    return;
+  }
+  const goButton = event.target.closest("[data-go]");
+  if (goButton) go(goButton.dataset.go);
+});
+els.myProfileOutput.addEventListener("submit", (event) => {
+  if (!["profileEditForm", "accountSecurityForm", "rewardCosmeticsForm"].includes(event.target.id)) return;
+  event.preventDefault();
+  const form = new FormData(event.target);
+  if (event.target.id === "accountSecurityForm") {
+    updateAccountSecurity({
+      accountEmail: form.get("accountEmail"),
+      newPassword: form.get("newPassword"),
+      confirmPassword: form.get("confirmPassword"),
+    });
+    return;
+  }
+  if (event.target.id === "rewardCosmeticsForm") {
+    updateRewardCosmetics({
+      selectedTitle: form.get("selectedTitle"),
+    });
+    return;
+  }
+  updateCurrentProfile({
+    displayName: String(form.get("displayName") || "").trim(),
+    riotId: String(form.get("riotId") || "").trim(),
+    discordId: String(form.get("discordId") || "").trim(),
+    xAccount: String(form.get("xAccount") || "").trim(),
+  });
+});
+
+els.adminLoginBtn.addEventListener("click", () => {
+  if (els.adminPin.value !== ADMIN_PIN) return;
+  els.adminLock.classList.add("hidden");
+  els.adminConsole.classList.remove("hidden");
+});
+
+els.tournamentForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!hasTournament()) {
+    alert("先に「新しい大会を作成」を押してください。");
+    return;
+  }
+  state.tournament = {
+    id: state.tournament.id || state.activeTournamentId || uid(),
+    name: els.tournamentName.value.trim() || "SPACE GODS CUP",
+    startAt: els.tournamentStart.value,
+    status: els.tournamentStatus.value,
+    formatType: els.tournamentFormatType.value === "openSwiss" ? "sixGame" : els.tournamentFormatType.value,
+    maxPlayers: Math.min(256, Math.max(8, Number(els.tournamentMaxPlayers.value || 256))),
+    lobbyRule: els.tournamentLobbyRule.value,
+    stages: readStageRows(),
+  };
+  render();
+  go("home");
+});
+
+els.createTournamentBtn.addEventListener("click", createTournament);
+els.deleteTournamentBtn.addEventListener("click", deleteCurrentTournament);
+els.deleteAllTournamentsBtn.addEventListener("click", deleteAllTournaments);
+els.tournamentList.addEventListener("click", (event) => {
+  const button = event.target.closest(".tournament-list-item");
+  if (!button) return;
+  loadTournament(button.dataset.id);
+});
+
+els.tournamentCarousel.addEventListener("click", (event) => {
+  const archiveButton = event.target.closest("[data-go='past']");
+  if (archiveButton) {
+    go("past");
+    return;
+  }
+  const button = event.target.closest(".tournament-slide");
+  if (!button || button.classList.contains("active")) return;
+  loadTournament(button.dataset.tournamentId);
+  go("home");
+});
+
+els.openEntryBtn?.addEventListener("click", () => setTournamentStatus("entry"));
+els.openCheckInBtn?.addEventListener("click", () => setTournamentStatus("checkin"));
+els.startTournamentBtn.addEventListener("click", () => setTournamentStatus("live"));
+els.finishTournamentBtn.addEventListener("click", () => setTournamentStatus("finished"));
+
+els.tournamentFormatType.addEventListener("change", () => {
+  if (!hasTournament()) return;
+  state.tournament.formatType = els.tournamentFormatType.value === "openSwiss" ? "sixGame" : els.tournamentFormatType.value;
+  state.tournament.lobbyRule = defaultLobbyRuleForFormat(els.tournamentFormatType.value);
+  els.tournamentLobbyRule.value = state.tournament.lobbyRule;
+  state.tournament.stages = formatTemplate(els.tournamentFormatType.value);
+  renderFormatStages();
+});
+
+els.tournamentMaxPlayers.addEventListener("change", () => {
+  if (!hasTournament()) return;
+  state.tournament.maxPlayers = Math.min(256, Math.max(8, Number(els.tournamentMaxPlayers.value || 256)));
+  els.tournamentMaxPlayers.value = state.tournament.maxPlayers;
+  renderHome();
+});
+
+els.tournamentLobbyRule.addEventListener("change", () => {
+  if (!hasTournament()) return;
+  state.tournament.lobbyRule = els.tournamentLobbyRule.value;
+  state.lobbies = [];
+  state.lobbyHosts = [];
+  state.results = {};
+  state.reports = [];
+  render();
+});
+
+document.querySelectorAll(".format-template").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!hasTournament()) return;
+    state.tournament.formatType = button.dataset.template;
+    state.tournament.lobbyRule = defaultLobbyRuleForFormat(button.dataset.template);
+    state.tournament.stages = formatTemplate(button.dataset.template);
+    renderTournamentForm();
+  });
+});
+
+els.addStageBtn.addEventListener("click", () => {
+  if (!hasTournament()) return;
+  state.tournament.stages = readStageRows();
+  state.tournament.stages.push({ name: "", detail: "" });
+  renderFormatStages();
+});
+
+els.formatStages.addEventListener("input", () => {
+  if (!hasTournament()) return;
+  state.tournament.stages = readStageRows();
+});
+
+els.formatStages.addEventListener("click", (event) => {
+  const button = event.target.closest(".remove-stage");
+  if (!button) return;
+  if (!hasTournament()) return;
+  state.tournament.stages = readStageRows().filter((_, index) => index !== Number(button.dataset.index));
+  if (!state.tournament.stages.length) state.tournament.stages = [{ name: "", detail: "" }];
+  renderFormatStages();
+});
+
+els.authForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  authLoginOrRegister(els.authLoginId.value.trim(), els.authPassword.value, {
+    displayName: els.authDisplayName.value.trim(),
+    riotId: els.authRiotId.value.trim(),
+    discordId: els.authDiscordId.value.trim(),
+    xAccount: els.authXAccount.value.trim(),
+  });
+  els.authForm.reset();
+});
+
+els.reportGame.addEventListener("change", renderReportSelectors);
+els.reportLobby.addEventListener("change", () => {
+  renderReportSubmitter();
+  renderManualFallback();
+});
+
+els.homeCheckInBtn.addEventListener("click", performCheckIn);
+els.checkInDialogBtn.addEventListener("click", performCheckIn);
+els.checkInDialogCloseBtn.addEventListener("click", () => els.checkInDialog.close());
+
+els.reportImage.addEventListener("change", () => {
+  selectedReportFile = els.reportImage.files[0] || null;
+  latestReportMatches = [];
+  els.reportMatches.innerHTML = "";
+  if (!selectedReportFile) return;
+  els.reportPreview.src = URL.createObjectURL(selectedReportFile);
+  els.reportPreview.classList.add("has-image");
+  setReportStatus("画像を受け取りました。認識ボタンを押してください。");
+});
+
+els.analyzeReportBtn.addEventListener("click", () => analyzeReportImage().catch(() => setReportStatus("画像解析に失敗しました。手動報告を使ってください。")));
+els.submitOcrBtn.addEventListener("click", submitOcrReport);
+els.submitManualBtn.addEventListener("click", submitManualReport);
+
+els.playersTable.addEventListener("click", (event) => {
+  const subButton = event.target.closest(".sub-toggle");
+  if (subButton) {
+    const player = getPlayer(subButton.dataset.id);
+    if (!player) return;
+    player.isSubstitute = !player.isSubstitute;
+    render();
+    return;
+  }
+
+  const button = event.target.closest(".remove-player");
+  if (!button) return;
+  const id = button.dataset.id;
+  removePlayerFromTournament(id);
+  if (currentUserId === id) {
+    currentUserId = "";
+    localStorage.removeItem(SESSION_KEY);
+  }
+  render();
+});
+
+els.blockActions.addEventListener("click", (event) => {
+  const button = event.target.closest(".generate-block");
+  if (!button) return;
+  generateBlock(Number(button.dataset.block));
+});
+els.generateAllBtn.addEventListener("click", () => generateAllLobbies());
+els.seed256Btn.addEventListener("click", seed256Players);
+els.adminResultsOutput.addEventListener("change", (event) => {
+  if (event.target.tagName !== "SELECT") return;
+  updateAdminResult(event.target.dataset.game, event.target.dataset.player, event.target.value);
+});
+
+els.exportBtn.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `space-gods-cup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+els.importFile.addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    state = { ...defaultState(), ...JSON.parse(await file.text()) };
+    render();
+  } catch {
+    alert("JSONを読み込めませんでした。");
+  } finally {
+    event.target.value = "";
+  }
+});
+
+els.resetBtn.addEventListener("click", () => {
+  if (!confirm("大会データをすべて初期化しますか？")) return;
+  state = defaultState();
+  render();
+});
+
+go(location.hash.replace("#", "") || "home");
+render();

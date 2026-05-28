@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TFTRise</title>
+    <link rel="preconnect" href="https://cmsassets.rgpub.io" />
+    <link rel="stylesheet" href="./styles.css?v=89" />
+    <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#home" data-go="home" aria-label="大会ホーム">
+        <span class="brand-mark">SG</span>
+        <span>
+          <strong>TFTRise</strong>
+          <small>TFT Set 17: Space Gods</small>
+        </span>
+      </a>
+      <nav class="public-nav" aria-label="参加者メニュー">
+        <button class="nav-button active" type="button" data-go="home">大会</button>
+        <button class="nav-button" type="button" data-go="past">過去大会</button>
+        <button id="reportNavBtn" class="nav-button hidden" type="button" data-go="report">結果報告</button>
+      </nav>
+      <button id="myPageTopBtn" class="mypage-top-button" type="button" data-go="mypage">マイページ</button>
+      <button id="adminOpenBtn" class="admin-open" type="button">管理</button>
+    </header>
+    <div id="entryCompleteToast" class="entry-complete-toast hidden">
+      <strong>エントリー完了</strong>
+      <span>右上のマイページから、チェックインや自分のテーブルを確認できます。</span>
+    </div>
+
+    <main>
+      <section id="opening" class="screen opening-screen active">
+        <div class="opening-arena" aria-hidden="true">
+          <span class="arena-lane lane-a"></span>
+          <span class="arena-lane lane-b"></span>
+          <span class="arena-lane lane-c"></span>
+          <span class="arena-piece piece-a"><img src="https://raw.communitydragon.org/12.9/game/assets/maps/particles/tft/item_icons/standard/bf_sword.png" alt="" /></span>
+          <span class="arena-piece piece-b"><img src="https://raw.communitydragon.org/12.9/game/assets/maps/particles/tft/item_icons/standard/recurve_bow.png" alt="" /></span>
+          <span class="arena-piece piece-c"><img src="https://raw.communitydragon.org/12.9/game/assets/maps/particles/tft/item_icons/standard/needlessly_large_rod.png" alt="" /></span>
+          <span class="arena-pulse"></span>
+        </div>
+        <div class="opening-card">
+          <div class="opening-kicker">Tournament Command Center</div>
+          <div class="opening-hero-mark">TFTRise</div>
+          <p class="eyebrow">Competitive TFT Tournament Platform</p>
+          <h1>頂点を目指せ。</h1>
+          <p>TFTRiseは、TFTをもっと競技として楽しむための大会アプリです。</p>
+          <div class="auth-mode-toggle" role="group" aria-label="ログインと新規登録の切り替え">
+            <button id="loginModeBtn" class="auth-mode active" type="button" data-auth-mode="login">ログイン</button>
+            <button id="registerModeBtn" class="auth-mode" type="button" data-auth-mode="register">新規登録</button>
+          </div>
+          <form id="authForm" class="auth-form">
+            <label>ユーザー名またはメールアドレス<input id="authLoginId" required maxlength="80" placeholder="username / mail@example.com" /></label>
+            <label>パスワード<input id="authPassword" required type="password" maxlength="80" placeholder="password" /></label>
+            <div id="authProfileFields" class="auth-profile-fields hidden">
+              <label>表示名<input id="authDisplayName" maxlength="32" placeholder="例: tactician01" /></label>
+              <label>Riot ID<input id="authRiotId" maxlength="48" placeholder="例: Name#JP1" /></label>
+              <label>Discord ID<input id="authDiscordId" maxlength="48" placeholder="例: @user" /></label>
+              <label>X（任意）<input id="authXAccount" maxlength="32" placeholder="例: @account" /></label>
+            </div>
+            <button id="authSubmitBtn" class="primary-button" type="submit">ログイン</button>
+          </form>
+          <p id="authHelpText" class="source-note">既存アカウントはユーザー名またはメールアドレスとパスワードだけでログインできます。</p>
+        </div>
+      </section>
+
+      <section id="home" class="screen">
+        <section id="tournamentCarousel" class="tournament-carousel" aria-label="大会を選択"></section>
+
+        <section id="tournamentCard" class="hero tournament-card" role="button" tabindex="0" aria-label="大会詳細を開く">
+          <div class="hero-copy">
+            <p class="eyebrow">開催中の大会</p>
+            <span id="publicStatusBadge" class="status-badge">エントリー受付中</span>
+            <h1 id="publicTournamentName">SPACE GODS CUP</h1>
+            <p id="publicTournamentSummary">TFT Set 17「Space Gods / 神々」の6戦トーナメント。参加者はエントリーと、各ロビー1位による試合結果報告だけ行ってください。</p>
+          </div>
+          <aside class="format-box" aria-label="大会形式">
+            <span>開始日時</span><strong id="publicStartAt">未設定</strong>
+            <span>形式</span><strong id="publicFormatName">1大会 6戦</strong>
+          </aside>
+        </section>
+
+        <div class="status-strip">
+          <article><span id="homePlayerCount">0</span><small>エントリー</small></article>
+          <article><span id="homeSubCount">0</span><small>補欠</small></article>
+          <article><span id="homeCompletedGames">0/6</span><small>完了試合</small></article>
+        </div>
+
+        <section class="entry-cta-panel" id="entryCtaPanel">
+          <div>
+            <p class="eyebrow">Entry</p>
+            <h2 id="entryCtaTitle">この大会にエントリー</h2>
+            <p id="entryCtaText">ログイン後、1タップで大会へ参加できます。</p>
+          </div>
+          <div class="entry-cta-actions">
+            <button id="homeEntryBtn" class="primary-button entry-cta-button" type="button">エントリーする</button>
+            <button id="homeCheckInBtn" class="secondary-button entry-cta-button hidden" type="button">チェックイン</button>
+          </div>
+        </section>
+
+        <details class="panel public-entry-list">
+          <summary class="list-heading">
+            <div>
+              <p class="eyebrow">Entry List</p>
+              <h2>参加者リスト</h2>
+            </div>
+            <span class="privacy-note">開いて確認</span>
+          </summary>
+          <div id="publicPlayersList" class="public-players"></div>
+        </details>
+
+        <section id="publicStandingsPanel" class="panel public-standings-panel hidden">
+          <div class="list-heading">
+            <div>
+              <p class="eyebrow">Live Standings</p>
+              <h2>全体順位</h2>
+            </div>
+            <span class="privacy-note">自分の順位を強調表示</span>
+          </div>
+          <div id="publicStandingsList" class="public-standings-list"></div>
+        </section>
+
+        <section id="publicLobbyPanel" class="panel public-lobby-panel hidden">
+          <div class="list-heading">
+            <div>
+              <p class="eyebrow">Lobby Map</p>
+              <h2>ロビー全体</h2>
+            </div>
+            <span class="privacy-note">テーブル開設者と参加者を確認</span>
+          </div>
+          <div id="publicLobbyList" class="public-lobby-list"></div>
+        </section>
+
+      </section>
+
+      <section id="past" class="screen">
+        <div class="page-heading">
+          <p class="eyebrow">Archive</p>
+          <h2>過去大会</h2>
+          <p>終了した大会の最終順位と結果を確認できます。</p>
+        </div>
+        <section class="panel past-tournaments-panel">
+          <div id="pastTournamentsList" class="past-tournaments-list"></div>
+        </section>
+      </section>
+
+      <section id="report" class="screen">
+        <div class="page-heading">
+          <p class="eyebrow">Winner Report</p>
+          <h2>試合結果の報告</h2>
+          <p>各ロビーの1位の人が、TFTのリザルトスクリーンショットを提出してください。画像が出せない場合だけ手動報告を使ってください。</p>
+        </div>
+        <section class="panel report-panel">
+          <div class="report-grid report-grid-auto">
+            <input id="reportGame" type="hidden" value="" />
+            <input id="reportLobby" type="hidden" value="" />
+            <div class="report-target-card">
+              <span>現在の報告対象</span>
+              <strong id="reportTargetSummary">ロビー生成後に表示されます</strong>
+            </div>
+            <div class="report-submitter-note">
+              <span>提出者</span>
+              <strong id="reportSubmitterName">ログイン中のアカウントを使用</strong>
+            </div>
+          </div>
+          <div id="reportGate" class="report-gate"></div>
+          <div class="upload-card">
+            <label>リザルトスクリーンショット
+              <input id="reportImage" type="file" accept="image/*" />
+            </label>
+            <img id="reportPreview" class="preview" alt="提出画像プレビュー" />
+            <div class="report-actions">
+              <button id="analyzeReportBtn" class="primary-button" type="button">画像から着順認識</button>
+              <button id="submitOcrBtn" class="secondary-button" type="button">認識結果で報告</button>
+            </div>
+            <p id="reportStatus" class="status-text">ロビーを選び、画像をアップロードしてください。</p>
+            <ol id="reportMatches" class="match-list"></ol>
+          </div>
+          <details class="manual-fallback">
+            <summary>画像を提出できない場合のみ手動報告</summary>
+            <div id="manualFallbackRows" class="manual-grid"></div>
+            <button id="submitManualBtn" class="secondary-button" type="button">手動内容で報告</button>
+          </details>
+        </section>
+      </section>
+
+      <section id="mypage" class="screen">
+        <div class="page-heading">
+          <p class="eyebrow">My Page</p>
+          <h2>マイページ</h2>
+          <p>ログイン中のアカウントの現在のテーブル、成績、総合順位を確認できます。</p>
+        </div>
+        <section class="panel mypage-panel">
+          <div id="myProfileOutput" class="my-profile-output profile-primary"></div>
+          <div id="myNextAction" class="next-action-card"></div>
+          <div class="mypage-main-grid">
+            <div class="mypage-left-stack">
+              <div id="mySummary" class="my-summary"></div>
+              <div id="myEntryActions" class="my-entry-actions"></div>
+              <div id="myHistoryOutput" class="my-history-output"></div>
+            </div>
+            <div class="mypage-right-stack">
+              <div id="myLobbyOutput" class="my-lobby-output"></div>
+              <div id="myPastResultsOutput" class="my-past-results-output"></div>
+            </div>
+          </div>
+          <div class="mypage-actions">
+            <button id="logoutTopBtn" class="logout-button hidden" type="button">ログアウト</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="admin" class="screen">
+        <div id="adminLock" class="panel admin-lock">
+          <p class="eyebrow">Admin</p>
+          <h2>管理者操作</h2>
+          <p>ロビー生成、手動修正、JSON操作、初期化は管理側だけに表示します。</p>
+          <div class="admin-login">
+            <input id="adminPin" type="password" placeholder="管理PIN（初期値: admin）" />
+            <button id="adminLoginBtn" class="primary-button" type="button">解除</button>
+          </div>
+        </div>
+
+        <div id="adminConsole" class="admin-console hidden">
+          <div class="admin-toolbar">
+            <div>
+              <p class="eyebrow">Admin Console</p>
+              <h2>大会管理</h2>
+            </div>
+            <div class="admin-actions">
+              <button id="startTournamentBtn" class="primary-button" type="button">大会開始</button>
+              <button id="finishTournamentBtn" class="danger-button" type="button">大会終了</button>
+              <button id="generateAllBtn" class="primary-button" type="button">次ロビー生成</button>
+              <button id="seed256Btn" class="secondary-button" type="button">テスト256名投入</button>
+              <button id="exportBtn" class="secondary-button" type="button">JSON出力</button>
+              <label class="secondary-button file-button">JSON読込<input id="importFile" type="file" accept="application/json" /></label>
+              <button id="resetBtn" class="danger-button" type="button">初期化</button>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <section class="panel wide">
+              <h3>大会一覧</h3>
+              <div class="tournament-list-actions">
+                <button id="createTournamentBtn" class="primary-button" type="button">新しい大会を作成</button>
+                <button id="deleteTournamentBtn" class="danger-button" type="button">現在の大会を削除</button>
+                <button id="deleteAllTournamentsBtn" class="danger-button" type="button">大会を全部削除</button>
+              </div>
+              <div id="tournamentList" class="tournament-list"></div>
+            </section>
+
+            <section class="panel wide">
+              <h3>大会情報</h3>
+              <form id="tournamentForm" class="tournament-form">
+                <label>大会名<input id="tournamentName" maxlength="64" placeholder="例: SPACE GODS CUP #1" /></label>
+                <label>開始日時<input id="tournamentStart" type="datetime-local" /></label>
+                <label>状態
+                  <select id="tournamentStatus">
+                    <option value="entry">エントリー受付中</option>
+                    <option value="checkin">チェックイン受付中</option>
+                    <option value="ready">開始確認待ち</option>
+                    <option value="live">開催中</option>
+                    <option value="finished">終了</option>
+                  </select>
+                </label>
+                <label>大会形式
+                  <select id="tournamentFormatType">
+                    <option value="sixGame">6戦総合pt式</option>
+                    <option value="oneDayElim">1日完結型（鰹節杯ルール）256→決勝</option>
+                    <option value="multiDay">Day1 / Day2 / Day3式</option>
+                    <option value="custom">カスタム</option>
+                  </select>
+                </label>
+                <label>定員
+                  <input id="tournamentMaxPlayers" type="number" min="8" max="256" step="8" value="256" />
+                </label>
+                <label>ロビー抽選
+                  <select id="tournamentLobbyRule">
+                    <option value="every2Games">2試合ごとに抽選</option>
+                    <option value="everyGame">毎試合抽選</option>
+                  </select>
+                </label>
+                <button class="primary-button" type="submit">大会情報を保存</button>
+              </form>
+              <div class="format-editor">
+                <div class="format-editor-head">
+                  <h4>形式詳細</h4>
+                  <div class="format-template-actions">
+                    <button class="secondary-button format-template" type="button" data-template="sixGame">6戦総合ptを適用</button>
+                    <button class="secondary-button format-template" type="button" data-template="oneDayElim">鰹節杯ルールを適用</button>
+                    <button class="secondary-button format-template" type="button" data-template="multiDay">Day制を適用</button>
+                  </div>
+                </div>
+                <div id="formatStages" class="format-stages"></div>
+                <button id="addStageBtn" class="secondary-button" type="button">ステージ追加</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h3>参加者</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>区分</th><th>表示名</th><th>Riot ID</th><th>Discord</th><th>X</th><th></th></tr></thead>
+                  <tbody id="playersTable"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h3>ロビー</h3>
+              <div class="block-actions">
+                <button class="secondary-button generate-block" data-block="0" type="button">Game 1-2 再生成</button>
+                <button class="secondary-button generate-block" data-block="1" type="button">Game 3-4 再生成</button>
+                <button class="secondary-button generate-block" data-block="2" type="button">Game 5-6 再生成</button>
+              </div>
+              <div id="lobbyOutput" class="lobby-output"></div>
+            </section>
+
+            <section class="panel wide">
+              <h3>報告・手動修正</h3>
+              <div id="adminResultsOutput" class="admin-results"></div>
+            </section>
+
+            <section class="panel wide">
+              <h3>総合順位</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>順位</th><th>選手</th><th>Pt</th><th>平均</th><th>1位率</th><th>Top4率</th><th>履歴</th></tr></thead>
+                  <tbody id="standingsTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="tournamentDialog" class="tournament-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Tournament Detail</p>
+          <h2 id="dialogTournamentName">SPACE GODS CUP</h2>
+        </div>
+        <button id="dialogCloseBtn" class="secondary-button" type="button">閉じる</button>
+      </div>
+      <div class="dialog-summary">
+        <article><span>状態</span><strong id="dialogStatus">エントリー受付中</strong></article>
+        <article><span>開始日時</span><strong id="dialogStartAt">未設定</strong></article>
+        <article><span>形式</span><strong id="dialogFormatName">6戦総合pt式</strong></article>
+        <article><span>ロビー</span><strong id="dialogLobbyRule">2戦ごとに再抽選</strong></article>
+      </div>
+      <div class="dialog-actions">
+        <button id="dialogEntryBtn" class="primary-button" type="button">エントリーする</button>
+        <button id="dialogReportBtn" class="secondary-button hidden" type="button">1位報告へ</button>
+        <button id="dialogDetailToggle" class="secondary-button" type="button">大会詳細</button>
+        <button id="dialogTimelineToggle" class="secondary-button" type="button">タイムライン</button>
+      </div>
+      <div id="publicFormatDetails" class="format-detail-list hidden"></div>
+      <div id="publicTimelineDetails" class="format-detail-list hidden"></div>
+    </dialog>
+
+    <dialog id="entryNoticeDialog" class="tournament-dialog entry-notice-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Entry Agreement</p>
+          <h2>エントリー前の確認</h2>
+        </div>
+        <button id="entryNoticeCancelBtn" class="secondary-button" type="button">戻る</button>
+      </div>
+      <p class="dialog-lead">大会に参加する前に、以下の注意事項を確認してください。</p>
+      <ul class="notice-list">
+        <li>エントリー後、チェックインした場合は大会途中での辞退・キャンセルはできません。</li>
+        <li>無断欠席、遅刻、連絡なしの離脱など進行の妨げになる行為はアカウント停止につながる場合があります。</li>
+        <li>八百長、ウィントレード、談合、順位操作、外部連絡による不正な協力は禁止です。</li>
+        <li>運営からの案内、テーブル作成依頼、結果報告の指示には速やかに対応してください。</li>
+      </ul>
+      <div id="entryNoticeTimeline" class="notice-timeline"></div>
+      <label class="notice-confirm">
+        <input id="entryTimelineConfirm" type="checkbox" />
+        大会タイムラインを確認しました
+      </label>
+      <div class="dialog-actions">
+        <button id="entryNoticeAgreeBtn" class="primary-button" type="button">同意してエントリー</button>
+      </div>
+    </dialog>
+
+    <dialog id="hostDialog" class="tournament-dialog host-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Lobby Host</p>
+          <h2>あなたがテーブルの開設者です</h2>
+        </div>
+        <button id="hostDialogCloseBtn" class="secondary-button" type="button">閉じる</button>
+      </div>
+      <p id="hostDialogText" class="dialog-lead">テーブル作成をお願いします。</p>
+      <div class="dialog-actions">
+        <button id="openLobbyGuideBtn" class="primary-button" type="button">テーブルの作り方</button>
+      </div>
+    </dialog>
+
+    <dialog id="lobbyGuideDialog" class="tournament-dialog guide-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Normal Invite Guide</p>
+          <h2>テーブルの作り方</h2>
+        </div>
+        <button id="guideCloseBtn" class="secondary-button" type="button">閉じる</button>
+      </div>
+      <ol class="guide-steps">
+        <li>LoLクライアントを開き、TFTのノーマルを選びます。</li>
+        <li>テーブル開設者が同じロビーの参加者をパーティに招待します。</li>
+        <li>招待対象が分かるように、Discordなどで Game / Lobby 番号を共有します。例: TFTRise Game1 Lobby 7。</li>
+        <li>8人全員が入室していることを確認します。</li>
+        <li>運営指示があるまで開始せず、開始OKが出たらゲームを開始します。</li>
+      </ol>
+      <p class="source-note">クライアント表記はパッチや地域で変わる場合があります。</p>
+    </dialog>
+
+    <dialog id="checkInDialog" class="tournament-dialog checkin-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Check-in Open</p>
+          <h2>チェックイン受付中</h2>
+        </div>
+        <button id="checkInDialogCloseBtn" class="secondary-button" type="button">閉じる</button>
+      </div>
+      <p class="dialog-lead">大会開始前のチェックイン時間です。参加する場合はチェックインしてください。</p>
+      <div class="dialog-actions">
+        <button id="checkInDialogBtn" class="primary-button" type="button">チェックインする</button>
+      </div>
+    </dialog>
+
+    <template id="placementOptions">
+      <option value="">-</option>
+      <option value="1">1位 / 8pt</option>
+      <option value="2">2位 / 7pt</option>
+      <option value="3">3位 / 6pt</option>
+      <option value="4">4位 / 5pt</option>
+      <option value="5">5位 / 4pt</option>
+      <option value="6">6位 / 3pt</option>
+      <option value="7">7位 / 2pt</option>
+      <option value="8">8位 / 1pt</option>
+    </template>
+
+    <script src="./app.js?v=89"></script>
+  </body>
+</html>
