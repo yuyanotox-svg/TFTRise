@@ -75,32 +75,34 @@
     css.textContent = `
       .owner-menu {
         position: relative;
-        display: inline-flex;
+        display: inline-grid;
         align-items: center;
-        gap: 8px;
+        justify-items: center;
       }
 
       .owner-options {
-        border: 1px solid rgba(91, 209, 255, 0.42);
-        background: rgba(11, 34, 57, 0.82);
-        color: #dff5ff;
-        border-radius: 8px;
-        min-height: 40px;
-        padding: 10px 14px;
+        width: 32px;
+        min-width: 32px;
+        min-height: 32px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.025);
+        color: rgba(223, 245, 255, 0.42);
+        border-radius: 6px;
+        padding: 0;
         font-weight: 800;
+        font-size: 0.9rem;
+        line-height: 1;
         cursor: pointer;
-        box-shadow: 0 0 22px rgba(91, 209, 255, 0.12);
+        box-shadow: none;
+      }
+
+      .owner-options:hover {
+        border-color: rgba(88, 199, 255, 0.35);
+        color: #58c7ff;
+        background: rgba(88, 199, 255, 0.08);
       }
 
       .owner-menu .admin-open {
-        position: absolute;
-        top: calc(100% + 8px);
-        right: 0;
-        z-index: 80;
-        white-space: nowrap;
-      }
-
-      .owner-menu .admin-open.hidden {
         display: none !important;
       }
 
@@ -108,14 +110,118 @@
         .owner-menu {
           grid-column: 2 / 4;
           justify-self: end;
-          gap: 6px;
         }
 
-        .owner-options,
-        .owner-menu .admin-open {
-          min-height: 34px !important;
-          padding: 7px 9px !important;
-          font-size: 0.76rem !important;
+        .owner-options {
+          width: 30px !important;
+          min-width: 30px !important;
+          min-height: 30px !important;
+          padding: 0 !important;
+          font-size: 0.85rem !important;
+        }
+
+        .mypage-panel {
+          gap: 10px !important;
+          padding: 10px !important;
+        }
+
+        .profile-primary {
+          padding: 10px !important;
+        }
+
+        .profile-primary h3,
+        .my-lobby-output h3,
+        .my-history-output h3,
+        .my-past-results-output h3 {
+          margin: 0 !important;
+          font-size: 1rem !important;
+        }
+
+        .profile-hero {
+          align-items: center !important;
+          gap: 10px !important;
+          padding: 10px !important;
+        }
+
+        .profile-avatar-wrap {
+          width: 58px !important;
+          height: 58px !important;
+          border-radius: 12px !important;
+        }
+
+        .profile-avatar {
+          border-radius: 12px !important;
+        }
+
+        .profile-hero strong {
+          font-size: 1.14rem !important;
+        }
+
+        .profile-hero em,
+        .profile-hero p {
+          font-size: 0.72rem !important;
+        }
+
+        .profile-grid,
+        .my-summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 7px !important;
+        }
+
+        .profile-grid article,
+        .my-summary article,
+        .past-result-card {
+          padding: 9px !important;
+          gap: 5px !important;
+        }
+
+        .profile-grid span,
+        .my-summary span,
+        .past-result-card span {
+          font-size: 0.7rem !important;
+        }
+
+        .profile-grid strong,
+        .my-summary strong,
+        .past-result-card strong {
+          font-size: 0.9rem !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .mypage-main-grid {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 10px !important;
+        }
+
+        .mypage-right-stack {
+          order: 1 !important;
+          gap: 10px !important;
+        }
+
+        .mypage-left-stack {
+          order: 2 !important;
+          gap: 10px !important;
+        }
+
+        .next-action-card,
+        .entry-cancel-card,
+        .my-lobby-tournament,
+        .my-lobby-card {
+          padding: 10px !important;
+        }
+
+        .my-lobby-head {
+          grid-template-columns: 1fr !important;
+        }
+
+        .my-lobby-head strong {
+          min-height: 36px !important;
+          font-size: 1.2rem !important;
+        }
+
+        .my-lobby-card li {
+          padding: 8px !important;
         }
       }
     `;
@@ -131,7 +237,9 @@
       ownerOptionsBtn.id = "ownerOptionsBtn";
       ownerOptionsBtn.className = "owner-options";
       ownerOptionsBtn.type = "button";
-      ownerOptionsBtn.textContent = "開設者オプション";
+      ownerOptionsBtn.setAttribute("aria-label", "開設者オプション");
+      ownerOptionsBtn.title = "開設者オプション";
+      ownerOptionsBtn.textContent = "•••";
 
       adminOpenBtn.classList.add("hidden");
       adminOpenBtn.parentNode.insertBefore(ownerMenu, adminOpenBtn);
@@ -140,12 +248,7 @@
 
       ownerOptionsBtn.addEventListener("click", (event) => {
         event.stopPropagation();
-        adminOpenBtn.classList.toggle("hidden");
-      });
-
-      document.addEventListener("click", (event) => {
-        if (event.target.closest(".owner-menu")) return;
-        adminOpenBtn.classList.add("hidden");
+        adminOpenBtn.click();
       });
 
       const adminLoginBtn = document.querySelector("#adminLoginBtn");
