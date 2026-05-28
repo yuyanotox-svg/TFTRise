@@ -7,6 +7,8 @@
   let lastSaved = "";
   const originalSetItem = localStorage.setItem.bind(localStorage);
 
+  installOwnerOptions();
+
   localStorage.setItem = function patchedSetItem(key, value) {
     originalSetItem(key, value);
     if (key === STORAGE_KEY) scheduleSave(value);
@@ -65,5 +67,108 @@
       });
     if (error) throw error;
     lastSaved = value;
+  }
+
+  function installOwnerOptions() {
+    const ADMIN_PIN = "Yuuya1228";
+    const css = document.createElement("style");
+    css.textContent = `
+      .owner-menu {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .owner-options {
+        border: 1px solid rgba(91, 209, 255, 0.42);
+        background: rgba(11, 34, 57, 0.82);
+        color: #dff5ff;
+        border-radius: 8px;
+        min-height: 40px;
+        padding: 10px 14px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 0 22px rgba(91, 209, 255, 0.12);
+      }
+
+      .owner-menu .admin-open {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 80;
+        white-space: nowrap;
+      }
+
+      .owner-menu .admin-open.hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 640px) {
+        .owner-menu {
+          grid-column: 2 / 4;
+          justify-self: end;
+          gap: 6px;
+        }
+
+        .owner-options,
+        .owner-menu .admin-open {
+          min-height: 34px !important;
+          padding: 7px 9px !important;
+          font-size: 0.76rem !important;
+        }
+      }
+    `;
+    document.head.appendChild(css);
+
+    const enhance = () => {
+      const adminOpenBtn = document.querySelector("#adminOpenBtn");
+      if (!adminOpenBtn || document.querySelector("#ownerOptionsBtn")) return;
+
+      const ownerMenu = document.createElement("div");
+      ownerMenu.className = "owner-menu";
+      const ownerOptionsBtn = document.createElement("button");
+      ownerOptionsBtn.id = "ownerOptionsBtn";
+      ownerOptionsBtn.className = "owner-options";
+      ownerOptionsBtn.type = "button";
+      ownerOptionsBtn.textContent = "開設者オプション";
+
+      adminOpenBtn.classList.add("hidden");
+      adminOpenBtn.parentNode.insertBefore(ownerMenu, adminOpenBtn);
+      ownerMenu.appendChild(ownerOptionsBtn);
+      ownerMenu.appendChild(adminOpenBtn);
+
+      ownerOptionsBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        adminOpenBtn.classList.toggle("hidden");
+      });
+
+      document.addEventListener("click", (event) => {
+        if (event.target.closest(".owner-menu")) return;
+        adminOpenBtn.classList.add("hidden");
+      });
+
+      const adminLoginBtn = document.querySelector("#adminLoginBtn");
+      const adminPin = document.querySelector("#adminPin");
+      const adminLock = document.querySelector("#adminLock");
+      const adminConsole = document.querySelector("#adminConsole");
+      if (adminPin) adminPin.placeholder = "管理PIN";
+      adminLoginBtn?.addEventListener(
+        "click",
+        (event) => {
+          if (adminPin?.value !== ADMIN_PIN) return;
+          event.stopImmediatePropagation();
+          adminLock?.classList.add("hidden");
+          adminConsole?.classList.remove("hidden");
+        },
+        true
+      );
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", enhance);
+    } else {
+      enhance();
+    }
   }
 })();
