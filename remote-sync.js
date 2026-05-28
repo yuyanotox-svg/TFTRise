@@ -156,8 +156,8 @@
       adminLoginBtn?.addEventListener(
         "click",
         (event) => {
-          if (adminPin?.value !== ADMIN_PIN) return;
           event.stopImmediatePropagation();
+          if (adminPin?.value !== ADMIN_PIN) return;
           adminLock?.classList.add("hidden");
           adminConsole?.classList.remove("hidden");
         },
