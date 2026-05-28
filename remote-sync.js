@@ -73,178 +73,55 @@
     const ADMIN_PIN = "Yuuya1228";
     const css = document.createElement("style");
     css.textContent = `
-      .owner-menu {
-        position: relative;
-        display: inline-grid;
-        align-items: center;
-        justify-items: center;
-      }
-
-      .owner-options {
-        width: 32px;
-        min-width: 32px;
-        min-height: 32px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.025);
-        color: rgba(223, 245, 255, 0.42);
-        border-radius: 6px;
-        padding: 0;
-        font-weight: 800;
-        font-size: 0.9rem;
-        line-height: 1;
-        cursor: pointer;
-        box-shadow: none;
-      }
-
-      .owner-options:hover {
-        border-color: rgba(88, 199, 255, 0.35);
-        color: #58c7ff;
-        background: rgba(88, 199, 255, 0.08);
-      }
-
-      .owner-menu .admin-open {
-        display: none !important;
-      }
-
+      #adminOpenBtn { display: none !important; }
+      .owner-options-text { width: 100%; justify-content: center; }
+      .system-panel { display: grid; gap: 12px; max-width: 920px; }
+      .system-card { border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 12px; background: rgba(255,255,255,.035); }
+      .system-card summary { cursor: pointer; color: #f7fbff; font-weight: 900; }
+      .system-card p, .system-card li { color: #aab7cb; line-height: 1.75; }
+      .system-card ul { margin: 10px 0 0; padding-left: 18px; }
+      .owner-system-card { max-width: 360px; }
       @media (max-width: 640px) {
-        .owner-menu {
-          grid-column: 2 / 4;
-          justify-self: end;
-        }
-
-        .owner-options {
-          width: 30px !important;
-          min-width: 30px !important;
-          min-height: 30px !important;
-          padding: 0 !important;
-          font-size: 0.85rem !important;
-        }
-
-        .mypage-panel {
-          gap: 10px !important;
-          padding: 10px !important;
-        }
-
-        .profile-primary {
-          padding: 10px !important;
-        }
-
-        .profile-primary h3,
-        .my-lobby-output h3,
-        .my-history-output h3,
-        .my-past-results-output h3 {
-          margin: 0 !important;
-          font-size: 1rem !important;
-        }
-
-        .profile-hero {
-          align-items: center !important;
-          gap: 10px !important;
-          padding: 10px !important;
-        }
-
-        .profile-avatar-wrap {
-          width: 58px !important;
-          height: 58px !important;
-          border-radius: 12px !important;
-        }
-
-        .profile-avatar {
-          border-radius: 12px !important;
-        }
-
-        .profile-hero strong {
-          font-size: 1.14rem !important;
-        }
-
-        .profile-hero em,
-        .profile-hero p {
-          font-size: 0.72rem !important;
-        }
-
-        .profile-grid,
-        .my-summary {
-          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          gap: 7px !important;
-        }
-
-        .profile-grid article,
-        .my-summary article,
-        .past-result-card {
-          padding: 9px !important;
-          gap: 5px !important;
-        }
-
-        .profile-grid span,
-        .my-summary span,
-        .past-result-card span {
-          font-size: 0.7rem !important;
-        }
-
-        .profile-grid strong,
-        .my-summary strong,
-        .past-result-card strong {
-          font-size: 0.9rem !important;
-          overflow-wrap: anywhere !important;
-        }
-
-        .mypage-main-grid {
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 10px !important;
-        }
-
-        .mypage-right-stack {
-          order: 1 !important;
-          gap: 10px !important;
-        }
-
-        .mypage-left-stack {
-          order: 2 !important;
-          gap: 10px !important;
-        }
-
-        .next-action-card,
-        .entry-cancel-card,
-        .my-lobby-tournament,
-        .my-lobby-card {
-          padding: 10px !important;
-        }
-
-        .my-lobby-head {
-          grid-template-columns: 1fr !important;
-        }
-
-        .my-lobby-head strong {
-          min-height: 36px !important;
-          font-size: 1.2rem !important;
-        }
-
-        .my-lobby-card li {
-          padding: 8px !important;
-        }
+        .mypage-panel { gap: 10px !important; padding: 10px !important; }
+        .profile-primary { padding: 10px !important; }
+        .profile-primary h3, .my-lobby-output h3, .my-history-output h3, .my-past-results-output h3 { margin: 0 !important; font-size: 1rem !important; }
+        .profile-hero { align-items: center !important; gap: 10px !important; padding: 10px !important; }
+        .profile-avatar-wrap { width: 58px !important; height: 58px !important; border-radius: 12px !important; }
+        .profile-avatar { border-radius: 12px !important; }
+        .profile-hero strong { font-size: 1.14rem !important; }
+        .profile-hero em, .profile-hero p { font-size: .72rem !important; }
+        .profile-grid, .my-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 7px !important; }
+        .profile-grid article, .my-summary article, .past-result-card { padding: 9px !important; gap: 5px !important; }
+        .profile-grid span, .my-summary span, .past-result-card span { font-size: .7rem !important; }
+        .profile-grid strong, .my-summary strong, .past-result-card strong { font-size: .9rem !important; overflow-wrap: anywhere !important; }
+        .mypage-main-grid { display: flex !important; flex-direction: column !important; gap: 10px !important; }
+        .mypage-right-stack { order: 1 !important; gap: 10px !important; }
+        .mypage-left-stack { order: 2 !important; gap: 10px !important; }
+        .next-action-card, .entry-cancel-card, .my-lobby-tournament, .my-lobby-card { padding: 10px !important; }
+        .my-lobby-head { grid-template-columns: 1fr !important; }
+        .my-lobby-head strong { min-height: 36px !important; font-size: 1.2rem !important; }
+        .my-lobby-card li { padding: 8px !important; }
       }
     `;
     document.head.appendChild(css);
 
     const enhance = () => {
       const adminOpenBtn = document.querySelector("#adminOpenBtn");
-      if (!adminOpenBtn || document.querySelector("#ownerOptionsBtn")) return;
+      if (!adminOpenBtn) return;
+      ensureSystemScreen(adminOpenBtn);
+      if (document.querySelector("#ownerOptionsBtn")) return;
+      const ownerMount = document.querySelector("#ownerSystemMount");
+      if (!ownerMount) return;
 
-      const ownerMenu = document.createElement("div");
-      ownerMenu.className = "owner-menu";
       const ownerOptionsBtn = document.createElement("button");
       ownerOptionsBtn.id = "ownerOptionsBtn";
-      ownerOptionsBtn.className = "owner-options";
+      ownerOptionsBtn.className = "secondary-button owner-options-text";
       ownerOptionsBtn.type = "button";
       ownerOptionsBtn.setAttribute("aria-label", "開設者オプション");
       ownerOptionsBtn.title = "開設者オプション";
-      ownerOptionsBtn.textContent = "•••";
-
+      ownerOptionsBtn.textContent = "管理画面を開く";
       adminOpenBtn.classList.add("hidden");
-      adminOpenBtn.parentNode.insertBefore(ownerMenu, adminOpenBtn);
-      ownerMenu.appendChild(ownerOptionsBtn);
-      ownerMenu.appendChild(adminOpenBtn);
+      ownerMount.appendChild(ownerOptionsBtn);
 
       ownerOptionsBtn.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -272,6 +149,61 @@
       document.addEventListener("DOMContentLoaded", enhance);
     } else {
       enhance();
+    }
+  }
+
+  function ensureSystemScreen(adminOpenBtn) {
+    if (!document.querySelector("[data-go='system']")) {
+      const nav = document.querySelector(".public-nav");
+      const reportButton = document.querySelector("#reportNavBtn");
+      const systemButton = document.createElement("button");
+      systemButton.className = "nav-button";
+      systemButton.type = "button";
+      systemButton.dataset.go = "system";
+      systemButton.textContent = "システム";
+      systemButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        document.querySelectorAll(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === "system"));
+        document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.go === "system"));
+        if (location.hash !== "#system") location.hash = "system";
+      });
+      nav?.insertBefore(systemButton, reportButton || null);
+    }
+
+    if (!document.querySelector("#system")) {
+      const system = document.createElement("section");
+      system.id = "system";
+      system.className = "screen";
+      system.innerHTML = `
+        <div class="page-heading">
+          <p class="eyebrow">System</p>
+          <h2>システム</h2>
+          <p>利用規約、運営ポリシー、アカウント保守、開設者向けの操作をまとめています。</p>
+        </div>
+        <section class="panel system-panel">
+          <details open class="system-card">
+            <summary>利用規約・大会参加ルール</summary>
+            <ul>
+              <li>チェックイン後の途中辞退、無断欠席、進行を妨げる行為は禁止です。</li>
+              <li>八百長、ウィントレード、談合、順位操作、外部連絡による不正な協力は禁止です。</li>
+              <li>運営からの案内、テーブル作成依頼、結果報告の指示には速やかに対応してください。</li>
+            </ul>
+          </details>
+          <details class="system-card">
+            <summary>アカウント保守</summary>
+            <p>メールアドレス連携とパスワード変更はマイページのアカウント情報から編集できます。</p>
+          </details>
+          <details class="system-card owner-system-card">
+            <summary>開設者オプション</summary>
+            <p>大会作成、削除、進行補助などの管理操作は開設者のみ使用します。</p>
+            <div id="ownerSystemMount"></div>
+          </details>
+        </section>
+      `;
+      document.querySelector("main")?.insertBefore(system, adminOpenBtn.closest(".screen") || null);
+    } else if (!document.querySelector("#ownerSystemMount")) {
+      const details = document.querySelector(".owner-system-card");
+      details?.insertAdjacentHTML("beforeend", `<div id="ownerSystemMount"></div>`);
     }
   }
 })();
