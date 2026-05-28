@@ -5,7 +5,141 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TFTRise</title>
     <link rel="preconnect" href="https://cmsassets.rgpub.io" />
-    <link rel="stylesheet" href="./styles.css?v=90" />
+    <link rel="stylesheet" href="./styles.css?v=91" />
+    <style>
+      @media (max-width: 640px) {
+        html,
+        body {
+          height: auto !important;
+          min-height: 100% !important;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+        }
+
+        main {
+          height: auto !important;
+          min-height: calc(100vh - 72px) !important;
+          overflow: visible !important;
+          padding: 14px 12px 36px !important;
+          overscroll-behavior-y: auto !important;
+        }
+
+        .site-header {
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 30 !important;
+          grid-template-columns: 1fr auto auto !important;
+          gap: 8px !important;
+          padding: 8px 10px !important;
+        }
+
+        .brand {
+          gap: 8px !important;
+          min-width: 0 !important;
+        }
+
+        .brand-mark {
+          width: 34px !important;
+          height: 34px !important;
+          font-size: 0.85rem !important;
+        }
+
+        .brand strong {
+          font-size: 0.9rem !important;
+        }
+
+        .brand small {
+          display: none !important;
+        }
+
+        .public-nav {
+          gap: 6px !important;
+          justify-self: end !important;
+        }
+
+        .nav-button,
+        .admin-open,
+        .mypage-top-button {
+          min-height: 36px !important;
+          padding: 8px 10px !important;
+          font-size: 0.8rem !important;
+        }
+
+        .mypage-top-button {
+          box-shadow: none !important;
+        }
+
+        .tournament-carousel {
+          gap: 8px !important;
+          margin-bottom: 10px !important;
+          overflow-x: auto !important;
+          padding-bottom: 4px !important;
+        }
+
+        .tournament-slide {
+          min-width: 82vw !important;
+          padding: 12px !important;
+        }
+
+        .hero {
+          min-height: auto !important;
+          padding: 18px !important;
+          gap: 14px !important;
+        }
+
+        .hero h1,
+        .opening-hero-mark {
+          font-size: 2.2rem !important;
+        }
+
+        .hero p,
+        .opening-card p {
+          font-size: 0.92rem !important;
+        }
+
+        .status-strip {
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+        }
+
+        .status-strip article {
+          padding: 10px 8px !important;
+        }
+
+        .status-strip span {
+          font-size: 1.25rem !important;
+        }
+
+        .entry-cta-panel,
+        .format-box,
+        .panel,
+        .mypage-panel,
+        .report-panel {
+          padding: 14px !important;
+        }
+
+        .opening-screen {
+          min-height: auto !important;
+          padding: 22px 10px 40px !important;
+        }
+
+        .opening-card {
+          width: min(100%, 520px) !important;
+          padding: 24px 18px !important;
+        }
+
+        .opening-kicker {
+          font-size: 0.7rem !important;
+        }
+
+        .entry-complete-toast {
+          right: 10px !important;
+          left: 10px !important;
+          top: 72px !important;
+          width: auto !important;
+        }
+      }
+    </style>
     <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   </head>
   <body>
@@ -396,7 +530,7 @@
       </div>
       <p id="hostDialogText" class="dialog-lead">テーブル作成をお願いします。</p>
       <div class="dialog-actions">
-        <button id="openLobbyGuideBtn" class="primary-button" type="ton">テーブルの作り方</button>
+        <button id="openLobbyGuideBtn" class="primary-button" type="button">テーブルの作り方</button>
       </div>
     </dialog>
 
@@ -411,7 +545,7 @@
       <ol class="guide-steps">
         <li>LoLクライアントを開き、TFTのノーマルを選びます。</li>
         <li>テーブル開設者が同じロビーの参加者をパーティに招待します。</li>
-        <li>招待対象が分かるように、Discordなどで Game / Lobby 番号を兕有します。例: TFTRise Game1 Lobby 7。</li>
+        <li>招待対象が分かるように、Discordなどで Game / Lobby 番号を共有します。例: TFTRise Game1 Lobby 7。</li>
         <li>8人全員が入室していることを確認します。</li>
         <li>運営指示があるまで開始せず、開始OKが出たらゲームを開始します。</li>
       </ol>
@@ -444,7 +578,45 @@
       <option value="8">8位 / 1pt</option>
     </template>
 
-    <script src="./remote-sync.js?v=90"></script>
-    <script src="./app.js?v=90"></script>
+    <script>
+      (() => {
+        const key = "tftrise-scroll";
+        const getTarget = () => {
+          const main = document.querySelector("main");
+          if (main && main.scrollHeight > main.clientHeight + 4) return main;
+          return document.scrollingElement || document.documentElement;
+        };
+        const save = () => {
+          try {
+            const target = getTarget();
+            sessionStorage.setItem(key, JSON.stringify({
+              hash: location.hash,
+              top: target.scrollTop || window.scrollY || 0
+            }));
+          } catch (_) {}
+        };
+        const restore = () => {
+          try {
+            const saved = JSON.parse(sessionStorage.getItem(key) || "null");
+            if (!saved || saved.hash !== location.hash) return;
+            requestAnimationFrame(() => {
+              const target = getTarget();
+              target.scrollTo({ top: saved.top, behavior: "instant" });
+            });
+          } catch (_) {}
+        };
+        let timer;
+        addEventListener("scroll", () => {
+          clearTimeout(timer);
+          timer = setTimeout(save, 120);
+        }, { passive: true });
+        addEventListener("beforeunload", save);
+        addEventListener("pagehide", save);
+        addEventListener("hashchange", () => setTimeout(restore, 120));
+        addEventListener("DOMContentLoaded", () => setTimeout(restore, 250));
+      })();
+    </script>
+    <script src="./remote-sync.js?v=91"></script>
+    <script src="./app.js?v=91"></script>
   </body>
 </html>
