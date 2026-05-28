@@ -17,11 +17,20 @@ TFT tournament operation app prototype.
 - Past tournament archive
 - Local JSON export/import
 
-## Current Data Storage
+## Data Storage
 
-This prototype stores data in browser `localStorage`.
+The app still keeps account/profile session data in browser `localStorage`, but tournament operation data can be synced through Supabase.
 
-For production release, the next step is moving accounts, tournaments, entries, lobbies, reports, and standings to a shared backend such as Supabase.
+To enable shared tournament data:
+
+1. Add these Vercel environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+2. Run `supabase-schema.sql` in the Supabase SQL editor.
+3. Load `remote-sync.js` before `app.js` in `index.html`.
+4. Redeploy the Vercel project.
+
+Full production auth is still a next step: moving login/register/password reset from the local prototype to Supabase Auth.
 
 ## Local Preview
 
