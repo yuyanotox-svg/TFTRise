@@ -130,6 +130,7 @@ function normalizeServerState(data) {
     });
   }
   snapshots.forEach(normalizeTournamentSnapshot);
+  normalized.activeTournamentId = chooseActiveTournamentId(normalized) || normalized.activeTournamentId;
   const active = (normalized.tournaments || []).find((item) => item.id === normalized.activeTournamentId);
   if (active) {
     normalized.tournament = active.tournament;
@@ -140,6 +141,42 @@ function normalizeServerState(data) {
     normalized.reports = active.reports || [];
   }
   return normalized;
+}
+
+function chooseActiveTournamentId(state) {
+  const tournaments = Array.isArray(state?.tournaments) ? state.tournaments : [];
+  if (!tournaments.length) return "";
+  const activeId = state?.activeTournamentId || "";
+  const ranked = tournaments
+    .map((item) => ({
+      id: item.id,
+      score: tournamentActivityScore(item, item.id === activeId),
+    }))
+    .sort((a, b) => b.score - a.score);
+  return ranked[0]?.id || tournaments[0]?.id || "";
+}
+
+function tournamentActivityScore(item, isCurrentActive) {
+  const tournament = item?.tournament || {};
+  const statusRank = { entry: 1, checkin: 4, ready: 5, live: 6, finished: 0 };
+  const status = tournament.status === "upcoming" ? "entry" : tournament.status || "entry";
+  const players = Array.isArray(item?.players) ? item.players.length : 0;
+  const checkedIn = Array.isArray(item?.players) ? item.players.filter((player) => player.checkedInAt).length : 0;
+  const lobbyCount = countNestedEntries(item?.lobbies || []);
+  let score = 0;
+  if (isCurrentActive) score += 12;
+  if (tournament.startAt) score += 120;
+  if (statusRank[status]) score += statusRank[status] * 20;
+  score += Math.min(players, 256);
+  score += Math.min(checkedIn, 256) * 2;
+  score += Math.min(lobbyCount, 256) * 3;
+  if (!tournament.startAt && status === "entry" && !lobbyCount) score -= 80;
+  return score;
+}
+
+function countNestedEntries(value) {
+  if (!Array.isArray(value)) return value ? 1 : 0;
+  return value.reduce((sum, item) => sum + countNestedEntries(item), 0);
 }
 
 function normalizeTournamentSnapshot(snapshot) {

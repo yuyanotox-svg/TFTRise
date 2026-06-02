@@ -114,7 +114,7 @@
     });
 
     merged.tournaments = [...tournamentMap.values()];
-    const activeId = localState.activeTournamentId || remoteState.activeTournamentId || merged.tournaments[0]?.id || "";
+    const activeId = chooseActiveTournamentId(remoteState, localState, merged.tournaments);
     const active = tournamentMap.get(activeId) || merged.tournaments[0];
     merged.activeTournamentId = active?.id || "";
     if (active) {
@@ -126,6 +126,42 @@
       merged.reports = active.reports || [];
     }
     return merged;
+  }
+
+  function chooseActiveTournamentId(remoteState, localState, tournaments) {
+    const items = Array.isArray(tournaments) ? tournaments : [];
+    if (!items.length) return "";
+    const remoteActiveId = remoteState?.activeTournamentId || "";
+    const localActiveId = localState?.activeTournamentId || "";
+    const ranked = items
+      .map((item) => ({
+        id: item.id,
+        score: tournamentActivityScore(item, {
+          isRemoteActive: item.id === remoteActiveId,
+          isLocalActive: item.id === localActiveId,
+        }),
+      }))
+      .sort((a, b) => b.score - a.score);
+    return ranked[0]?.id || items[0]?.id || "";
+  }
+
+  function tournamentActivityScore(item, flags = {}) {
+    const tournament = item?.tournament || {};
+    const statusRank = { entry: 1, checkin: 4, ready: 5, live: 6, finished: 0 };
+    const status = tournament.status === "upcoming" ? "entry" : tournament.status || "entry";
+    const players = Array.isArray(item?.players) ? item.players.length : 0;
+    const checkedIn = Array.isArray(item?.players) ? item.players.filter((player) => player.checkedInAt).length : 0;
+    const lobbyCount = countNestedEntries(item?.lobbies || []);
+    let score = 0;
+    if (flags.isRemoteActive) score += 20;
+    if (flags.isLocalActive) score += 8;
+    if (tournament.startAt) score += 120;
+    if (statusRank[status]) score += statusRank[status] * 20;
+    score += Math.min(players, 256);
+    score += Math.min(checkedIn, 256) * 2;
+    score += Math.min(lobbyCount, 256) * 3;
+    if (!tournament.startAt && status === "entry" && !lobbyCount) score -= 80;
+    return score;
   }
 
   function collectTournamentSnapshots(stateValue) {
