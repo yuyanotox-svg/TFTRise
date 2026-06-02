@@ -36,7 +36,7 @@ async function readState({ res, supabaseUrl, supabaseKey }) {
   }
 
   const rows = await response.json();
-  res.status(200).json({ ok: true, data: rows?.[0]?.data || null });
+  res.status(200).json({ ok: true, data: normalizeServerState(rows?.[0]?.data || null) });
 }
 
 async function writeState({ req, res, supabaseUrl, supabaseKey, keyMode }) {
@@ -58,7 +58,7 @@ async function writeState({ req, res, supabaseUrl, supabaseKey, keyMode }) {
     },
     body: JSON.stringify({
       id: REMOTE_STATE_ID,
-      data: body.data,
+      data: normalizeServerState(body.data),
       updated_at: new Date().toISOString(),
     }),
   });
@@ -111,4 +111,73 @@ function safeJson(value) {
   } catch (_) {
     return {};
   }
+}
+
+function normalizeServerState(data) {
+  if (!data || typeof data !== "object") return data;
+  const normalized = clone(data);
+  const snapshots = [];
+  (normalized.tournaments || []).forEach((item) => snapshots.push(item));
+  if (normalized.tournament) {
+    snapshots.push({
+      id: normalized.activeTournamentId || normalized.tournament.id,
+      tournament: normalized.tournament,
+      players: normalized.players,
+      lobbies: normalized.lobbies,
+      lobbyHosts: normalized.lobbyHosts,
+      results: normalized.results,
+      reports: normalized.reports,
+    });
+  }
+  snapshots.forEach(normalizeTournamentSnapshot);
+  const active = (normalized.tournaments || []).find((item) => item.id === normalized.activeTournamentId);
+  if (active) {
+    normalized.tournament = active.tournament;
+    normalized.players = active.players || [];
+    normalized.lobbies = active.lobbies || [];
+    normalized.lobbyHosts = active.lobbyHosts || [];
+    normalized.results = active.results || {};
+    normalized.reports = active.reports || [];
+  }
+  return normalized;
+}
+
+function normalizeTournamentSnapshot(snapshot) {
+  if (!snapshot?.tournament) return;
+  snapshot.tournament.status = automatedTournamentStatus(snapshot.tournament);
+  if (["entry", "checkin"].includes(snapshot.tournament.status)) {
+    delete snapshot.tournament.checkInFinalizedAt;
+    (snapshot.players || []).forEach((player) => {
+      if (player.checkedInAt) return;
+      player.didNotCheckIn = false;
+      player.isSubstitute = false;
+    });
+    snapshot.lobbies = [];
+    snapshot.lobbyHosts = [];
+    snapshot.results = {};
+    snapshot.reports = [];
+  }
+}
+
+function automatedTournamentStatus(tournament) {
+  const current = tournament.status === "upcoming" ? "entry" : tournament.status || "entry";
+  if (current === "live" || current === "finished") return current;
+  if (!tournament.startAt) return current === "ready" ? "ready" : "entry";
+  const start = parseJapanLocalDate(tournament.startAt);
+  if (!Number.isFinite(start)) return current;
+  const now = Date.now();
+  const checkInOpen = start - 30 * 60 * 1000;
+  if (now < checkInOpen) return "entry";
+  if (now <= start) return "checkin";
+  return "ready";
+}
+
+function parseJapanLocalDate(value) {
+  if (!value) return Number.NaN;
+  if (/[zZ]|[+-]\d\d:?\d\d$/.test(value)) return new Date(value).getTime();
+  return new Date(`${value}+09:00`).getTime();
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
 }

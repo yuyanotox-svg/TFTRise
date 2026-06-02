@@ -309,6 +309,7 @@ function applyTournamentAutomation() {
   (state.tournaments || []).forEach((item) => {
     if (item.tournament) {
       item.tournament.status = automatedTournamentStatus(item.tournament);
+      resetPrematureCheckInFinalization(item);
       if (["ready", "live"].includes(item.tournament.status) && !item.tournament.checkInFinalizedAt) {
         finalizeCheckInState(item);
       }
@@ -316,10 +317,27 @@ function applyTournamentAutomation() {
   });
   if (state.tournament) {
     state.tournament.status = automatedTournamentStatus(state.tournament);
+    resetPrematureCheckInFinalization(state);
     if (["ready", "live"].includes(state.tournament.status) && !state.tournament.checkInFinalizedAt) {
       finalizeCheckInState(state);
     }
   }
+}
+
+function resetPrematureCheckInFinalization(target) {
+  if (!target?.tournament || !["entry", "checkin"].includes(target.tournament.status)) return;
+  if (!target.tournament.checkInFinalizedAt && !(target.lobbies || []).some((block) => block?.length)) return;
+  delete target.tournament.checkInFinalizedAt;
+  (target.players || []).forEach((player) => {
+    if (!player.checkedInAt) {
+      player.didNotCheckIn = false;
+      player.isSubstitute = false;
+    }
+  });
+  target.lobbies = [];
+  target.lobbyHosts = [];
+  target.results = {};
+  target.reports = [];
 }
 
 function checkedInPlayerList(source = state) {

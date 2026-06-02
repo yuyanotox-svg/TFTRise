@@ -26,6 +26,9 @@
     remoteReady = true;
     await hydrateFromRemote();
     scheduleSave();
+    setInterval(() => {
+      hydrateFromRemote().catch((error) => console.warn("TFTRise remote refresh failed:", error));
+    }, 15000);
   }
 
   async function hydrateFromRemote() {
@@ -160,15 +163,15 @@
   function mergeTournamentSnapshot(remoteSnapshot, localSnapshot) {
     const remote = normalizeSnapshot(remoteSnapshot);
     const local = normalizeSnapshot(localSnapshot);
-    return {
+    return sanitizeSnapshot({
       id: remote.id || local.id,
       tournament: mergeTournamentMeta(remote.tournament, local.tournament),
       players: mergePlayers(remote.players, local.players),
-      lobbies: remote.lobbies?.length ? remote.lobbies : local.lobbies,
-      lobbyHosts: remote.lobbyHosts?.length ? remote.lobbyHosts : local.lobbyHosts,
+      lobbies: mergeLobbyBlocks(remote.lobbies, local.lobbies),
+      lobbyHosts: mergeLobbyBlocks(remote.lobbyHosts, local.lobbyHosts),
       results: mergeResults(remote.results, local.results),
       reports: mergeReports(remote.reports, local.reports),
-    };
+    });
   }
 
   function mergeTournamentMeta(remoteTournament, localTournament) {
@@ -178,7 +181,74 @@
     ["id", "name", "startAt", "status", "formatType", "maxPlayers", "lobbyRule", "stages", "contactLabel", "contactUrl"].forEach((key) => {
       if ((remote[key] === undefined || remote[key] === "" || remote[key] === null) && local[key] !== undefined) merged[key] = local[key];
     });
+    merged.status = strongestTournamentStatus(remote.status, local.status, automatedTournamentStatus(merged));
+    if (!merged.checkInFinalizedAt && local.checkInFinalizedAt) merged.checkInFinalizedAt = local.checkInFinalizedAt;
+    if (!merged.checkInFinalizedAt && remote.checkInFinalizedAt) merged.checkInFinalizedAt = remote.checkInFinalizedAt;
     return merged;
+  }
+
+  function sanitizeSnapshot(snapshot) {
+    const status = snapshot.tournament?.status || "entry";
+    if (["entry", "checkin"].includes(status)) {
+      delete snapshot.tournament.checkInFinalizedAt;
+      snapshot.players = (snapshot.players || []).map((player) => {
+        if (player.checkedInAt) return player;
+        return { ...player, didNotCheckIn: false, isSubstitute: false };
+      });
+      snapshot.lobbies = [];
+      snapshot.lobbyHosts = [];
+      snapshot.results = {};
+      snapshot.reports = [];
+    }
+    return snapshot;
+  }
+
+  function automatedTournamentStatus(tournament) {
+    if (!tournament) return "entry";
+    const current = tournament.status === "upcoming" ? "entry" : tournament.status || "entry";
+    if (current === "live" || current === "finished") return current;
+    if (!tournament.startAt) return current === "ready" ? "ready" : "entry";
+    const start = new Date(tournament.startAt).getTime();
+    if (!Number.isFinite(start)) return current;
+    const now = Date.now();
+    const checkInOpen = start - 30 * 60 * 1000;
+    if (now < checkInOpen) return "entry";
+    if (now <= start) return "checkin";
+    return "ready";
+  }
+
+  function strongestTournamentStatus(...statuses) {
+    const rank = { entry: 1, checkin: 2, ready: 3, live: 4, finished: 5 };
+    return statuses
+      .map((status) => status === "upcoming" ? "entry" : status)
+      .filter((status) => rank[status])
+      .sort((a, b) => rank[b] - rank[a])[0] || "entry";
+  }
+
+  function mergeLobbyBlocks(remoteBlocks, localBlocks) {
+    const maxLength = Math.max(remoteBlocks?.length || 0, localBlocks?.length || 0);
+    const merged = [];
+    for (let index = 0; index < maxLength; index += 1) {
+      const remoteBlock = Array.isArray(remoteBlocks?.[index]) ? remoteBlocks[index] : [];
+      const localBlock = Array.isArray(localBlocks?.[index]) ? localBlocks[index] : [];
+      merged[index] = richerLobbyBlock(remoteBlock, localBlock);
+    }
+    return merged;
+  }
+
+  function richerLobbyBlock(remoteBlock, localBlock) {
+    if (!remoteBlock.length) return localBlock;
+    if (!localBlock.length) return remoteBlock;
+    const remoteCount = countNestedEntries(remoteBlock);
+    const localCount = countNestedEntries(localBlock);
+    if (localBlock.length > remoteBlock.length) return localBlock;
+    if (remoteBlock.length > localBlock.length) return remoteBlock;
+    return localCount >= remoteCount ? localBlock : remoteBlock;
+  }
+
+  function countNestedEntries(value) {
+    if (!Array.isArray(value)) return value ? 1 : 0;
+    return value.reduce((sum, item) => sum + countNestedEntries(item), 0);
   }
 
   function mergePlayers(remotePlayers, localPlayers) {
