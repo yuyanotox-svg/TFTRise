@@ -60,7 +60,7 @@
   }
 
   async function saveRemoteState() {
-    const value = JSON.stringify(readLocalBundle());
+    const value = JSON.stringify(await readMergedRemoteBundle());
     if (!remoteReady || !value || value === lastSaved) return;
     const response = await fetch("/api/state", {
       method: "POST",
@@ -69,6 +69,149 @@
     });
     if (!response.ok) throw new Error("Remote state write failed");
     lastSaved = value;
+  }
+
+  async function readMergedRemoteBundle() {
+    const localBundle = readLocalBundle();
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) return localBundle;
+      const result = await response.json();
+      if (!result?.data) return localBundle;
+      return mergeBundles(readLocalBundleFromRemote(result.data), localBundle);
+    } catch {
+      return localBundle;
+    }
+  }
+
+  function mergeBundles(remoteBundle, localBundle) {
+    const remoteState = stripRemoteAccounts(remoteBundle || {});
+    const localState = stripRemoteAccounts(localBundle || {});
+    const merged = mergeState(remoteState, localState);
+    merged[REMOTE_ACCOUNTS_KEY] = {
+      ...(remoteBundle?.[REMOTE_ACCOUNTS_KEY] || {}),
+      ...(localBundle?.[REMOTE_ACCOUNTS_KEY] || {}),
+    };
+    return merged;
+  }
+
+  function mergeState(remoteState, localState) {
+    if (!remoteState?.tournament && !remoteState?.tournaments?.length) return localState || {};
+    if (!localState?.tournament && !localState?.tournaments?.length) return remoteState || {};
+
+    const merged = { ...remoteState };
+    const tournamentMap = new Map();
+    collectTournamentSnapshots(remoteState).forEach((snapshot) => tournamentMap.set(snapshot.id, snapshot));
+    collectTournamentSnapshots(localState).forEach((snapshot) => {
+      const previous = tournamentMap.get(snapshot.id);
+      tournamentMap.set(snapshot.id, previous ? mergeTournamentSnapshot(previous, snapshot) : snapshot);
+    });
+
+    merged.tournaments = [...tournamentMap.values()];
+    const activeId = localState.activeTournamentId || remoteState.activeTournamentId || merged.tournaments[0]?.id || "";
+    const active = tournamentMap.get(activeId) || merged.tournaments[0];
+    merged.activeTournamentId = active?.id || "";
+    if (active) {
+      merged.tournament = active.tournament || null;
+      merged.players = active.players || [];
+      merged.lobbies = active.lobbies || [];
+      merged.lobbyHosts = active.lobbyHosts || [];
+      merged.results = active.results || {};
+      merged.reports = active.reports || [];
+    }
+    return merged;
+  }
+
+  function collectTournamentSnapshots(stateValue) {
+    const snapshots = [];
+    (stateValue?.tournaments || []).forEach((item) => {
+      if (item?.id) snapshots.push(normalizeSnapshot(item));
+    });
+    if (stateValue?.tournament) {
+      snapshots.push(normalizeSnapshot({
+        id: stateValue.tournament.id || stateValue.activeTournamentId || "main",
+        tournament: stateValue.tournament,
+        players: stateValue.players || [],
+        lobbies: stateValue.lobbies || [],
+        lobbyHosts: stateValue.lobbyHosts || [],
+        results: stateValue.results || {},
+        reports: stateValue.reports || [],
+      }));
+    }
+    return snapshots;
+  }
+
+  function normalizeSnapshot(snapshot) {
+    const id = snapshot.id || snapshot.tournament?.id || "main";
+    return {
+      id,
+      tournament: { ...(snapshot.tournament || {}), id },
+      players: Array.isArray(snapshot.players) ? snapshot.players : [],
+      lobbies: Array.isArray(snapshot.lobbies) ? snapshot.lobbies : [],
+      lobbyHosts: Array.isArray(snapshot.lobbyHosts) ? snapshot.lobbyHosts : [],
+      results: snapshot.results || {},
+      reports: Array.isArray(snapshot.reports) ? snapshot.reports : [],
+    };
+  }
+
+  function mergeTournamentSnapshot(remoteSnapshot, localSnapshot) {
+    const remote = normalizeSnapshot(remoteSnapshot);
+    const local = normalizeSnapshot(localSnapshot);
+    return {
+      id: remote.id || local.id,
+      tournament: mergeTournamentMeta(remote.tournament, local.tournament),
+      players: mergePlayers(remote.players, local.players),
+      lobbies: remote.lobbies?.length ? remote.lobbies : local.lobbies,
+      lobbyHosts: remote.lobbyHosts?.length ? remote.lobbyHosts : local.lobbyHosts,
+      results: mergeResults(remote.results, local.results),
+      reports: mergeReports(remote.reports, local.reports),
+    };
+  }
+
+  function mergeTournamentMeta(remoteTournament, localTournament) {
+    const remote = remoteTournament || {};
+    const local = localTournament || {};
+    const merged = { ...local, ...remote };
+    ["id", "name", "startAt", "status", "formatType", "maxPlayers", "lobbyRule", "stages", "contactLabel", "contactUrl"].forEach((key) => {
+      if ((remote[key] === undefined || remote[key] === "" || remote[key] === null) && local[key] !== undefined) merged[key] = local[key];
+    });
+    return merged;
+  }
+
+  function mergePlayers(remotePlayers, localPlayers) {
+    const map = new Map();
+    [...(remotePlayers || []), ...(localPlayers || [])].forEach((player) => {
+      if (!player) return;
+      const key = playerMergeKey(player);
+      const previous = map.get(key) || {};
+      map.set(key, { ...previous, ...player, id: previous.id || player.id });
+    });
+    return [...map.values()];
+  }
+
+  function playerMergeKey(player) {
+    return normalizeKey(player.riotId) || normalizeKey(player.discordId) || normalizeKey(player.displayName) || String(player.id || "");
+  }
+
+  function mergeResults(remoteResults, localResults) {
+    const merged = { ...(remoteResults || {}) };
+    Object.entries(localResults || {}).forEach(([gameNo, placements]) => {
+      merged[gameNo] = { ...(merged[gameNo] || {}), ...(placements || {}) };
+    });
+    return merged;
+  }
+
+  function mergeReports(remoteReports, localReports) {
+    const map = new Map();
+    [...(remoteReports || []), ...(localReports || [])].forEach((report) => {
+      if (!report) return;
+      map.set(report.id || `${report.createdAt}-${report.submitterId}-${report.game}-${report.lobby}`, report);
+    });
+    return [...map.values()].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  }
+
+  function normalizeKey(value) {
+    return String(value || "").toLowerCase().normalize("NFKC").replace(/[#＃].*$/, "").replace(/[^a-z0-9@\._-]/g, "");
   }
 
   function readLocalBundle() {
