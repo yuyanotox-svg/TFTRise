@@ -2,7 +2,6 @@ const STORAGE_KEY = "tft-space-gods-cup";
 const SESSION_KEY = "tftrise-current-user";
 const PROFILE_KEY = "tftrise-profile";
 const ACCOUNTS_KEY = "tftrise-accounts";
-const ADMIN_PIN = "admin";
 const BLOCKS = [
   { label: "第1ブロック", games: [1, 2] },
   { label: "第2ブロック", games: [3, 4] },
@@ -12,14 +11,16 @@ const BLOCKS = [
 const scoreForPlacement = (placement) => (placement ? 9 - Number(placement) : 0);
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const DEFAULT_AVATAR_URL = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/29.jpg";
+const ADMIN_SESSION_KEY = "tftrise-admin-unlocked";
+const LOCAL_ADMIN_PIN = "Yuuya1228";
 const REWARD_TITLES = [
-  { id: "champion", name: "初代王者", note: "大会優勝報酬" },
-  { id: "finalist", name: "決勝卓の証明", note: "決勝進出報酬" },
-  { id: "top4", name: "TOP4常連", note: "上位入賞報酬" },
+  { id: "champion", name: "実装予定アイテム", note: "大会報酬予定" },
+  { id: "finalist", name: "実装予定アイテム", note: "大会報酬予定" },
+  { id: "top4", name: "実装予定アイテム", note: "大会報酬予定" },
 ];
 const REWARD_FRAMES = [
-  { id: "gold", name: "Champion Gold", note: "大会優勝フレーム" },
-  { id: "blue", name: "Finalist Blue", note: "決勝進出フレーム" },
+  { id: "gold", name: "実装予定アイテム", note: "大会報酬予定" },
+  { id: "blue", name: "実装予定アイテム", note: "大会報酬予定" },
 ];
 const defaultStages = () => [
   { name: "6戦総合pt", detail: "全6戦。ロビー抽選の頻度は管理側の設定に従い、合計ポイントで総合順位を決定。" },
@@ -34,6 +35,8 @@ function defaultTournament() {
     formatType: "sixGame",
     maxPlayers: 256,
     lobbyRule: "every2Games",
+    contactLabel: "運営Discord",
+    contactUrl: "",
     stages: defaultStages(),
   };
 }
@@ -52,6 +55,7 @@ const defaultState = () => ({
 let state = loadState();
 let currentUserId = localStorage.getItem(SESSION_KEY) || "";
 let currentProfile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+let pendingDeleteMode = "";
 if (!currentProfile && currentUserId) {
   const player = state.players.find((item) => item.id === currentUserId);
   if (player) currentProfile = {
@@ -76,7 +80,8 @@ const els = {
   authPassword: document.querySelector("#authPassword"),
   authProfileFields: document.querySelector("#authProfileFields"),
   authDisplayName: document.querySelector("#authDisplayName"),
-  authRiotId: document.querySelector("#authRiotId"),
+  authRiotName: document.querySelector("#authRiotName"),
+  authRiotTag: document.querySelector("#authRiotTag"),
   authDiscordId: document.querySelector("#authDiscordId"),
   authXAccount: document.querySelector("#authXAccount"),
   authSubmitBtn: document.querySelector("#authSubmitBtn"),
@@ -88,6 +93,7 @@ const els = {
   entryCtaPanel: document.querySelector("#entryCtaPanel"),
   entryCtaTitle: document.querySelector("#entryCtaTitle"),
   entryCtaText: document.querySelector("#entryCtaText"),
+  entryCtaSteps: document.querySelector("#entryCtaSteps"),
   homeEntryBtn: document.querySelector("#homeEntryBtn"),
   homeCheckInBtn: document.querySelector("#homeCheckInBtn"),
   entryCompleteToast: document.querySelector("#entryCompleteToast"),
@@ -123,6 +129,7 @@ const els = {
   entryNoticeCancelBtn: document.querySelector("#entryNoticeCancelBtn"),
   entryNoticeTimeline: document.querySelector("#entryNoticeTimeline"),
   entryTimelineConfirm: document.querySelector("#entryTimelineConfirm"),
+  entryRuleConfirm: document.querySelector("#entryRuleConfirm"),
   hostDialog: document.querySelector("#hostDialog"),
   hostDialogText: document.querySelector("#hostDialogText"),
   hostDialogCloseBtn: document.querySelector("#hostDialogCloseBtn"),
@@ -150,6 +157,13 @@ const els = {
   checkInDialog: document.querySelector("#checkInDialog"),
   checkInDialogCloseBtn: document.querySelector("#checkInDialogCloseBtn"),
   checkInDialogBtn: document.querySelector("#checkInDialogBtn"),
+  deleteConfirmDialog: document.querySelector("#deleteConfirmDialog"),
+  deleteConfirmTitle: document.querySelector("#deleteConfirmTitle"),
+  deleteConfirmText: document.querySelector("#deleteConfirmText"),
+  deleteConfirmTarget: document.querySelector("#deleteConfirmTarget"),
+  deleteConfirmInput: document.querySelector("#deleteConfirmInput"),
+  deleteConfirmExecuteBtn: document.querySelector("#deleteConfirmExecuteBtn"),
+  deleteConfirmCancelBtn: document.querySelector("#deleteConfirmCancelBtn"),
   analyzeReportBtn: document.querySelector("#analyzeReportBtn"),
   submitOcrBtn: document.querySelector("#submitOcrBtn"),
   submitManualBtn: document.querySelector("#submitManualBtn"),
@@ -157,6 +171,13 @@ const els = {
   adminOpenBtn: document.querySelector("#adminOpenBtn"),
   adminLock: document.querySelector("#adminLock"),
   adminConsole: document.querySelector("#adminConsole"),
+  adminNextAction: document.querySelector("#adminNextAction"),
+  adminOpsChecklist: document.querySelector("#adminOpsChecklist"),
+  startReadinessOutput: document.querySelector("#startReadinessOutput"),
+  runHealthCheckBtn: document.querySelector("#runHealthCheckBtn"),
+  healthCheckOutput: document.querySelector("#healthCheckOutput"),
+  runDataAuditBtn: document.querySelector("#runDataAuditBtn"),
+  dataAuditOutput: document.querySelector("#dataAuditOutput"),
   adminPin: document.querySelector("#adminPin"),
   adminLoginBtn: document.querySelector("#adminLoginBtn"),
   openEntryBtn: document.querySelector("#openEntryBtn"),
@@ -169,6 +190,8 @@ const els = {
   exportBtn: document.querySelector("#exportBtn"),
   importFile: document.querySelector("#importFile"),
   resetBtn: document.querySelector("#resetBtn"),
+  loadBackupsBtn: document.querySelector("#loadBackupsBtn"),
+  backupsOutput: document.querySelector("#backupsOutput"),
   playersTable: document.querySelector("#playersTable"),
   lobbyOutput: document.querySelector("#lobbyOutput"),
   adminResultsOutput: document.querySelector("#adminResultsOutput"),
@@ -185,8 +208,11 @@ const els = {
   tournamentFormatType: document.querySelector("#tournamentFormatType"),
   tournamentMaxPlayers: document.querySelector("#tournamentMaxPlayers"),
   tournamentLobbyRule: document.querySelector("#tournamentLobbyRule"),
+  tournamentContactLabel: document.querySelector("#tournamentContactLabel"),
+  tournamentContactUrl: document.querySelector("#tournamentContactUrl"),
   formatStages: document.querySelector("#formatStages"),
   addStageBtn: document.querySelector("#addStageBtn"),
+  supportContactOutput: document.querySelector("#supportContactOutput"),
 };
 
 function loadState() {
@@ -281,9 +307,57 @@ function automatedTournamentStatus(tournament) {
 
 function applyTournamentAutomation() {
   (state.tournaments || []).forEach((item) => {
-    if (item.tournament) item.tournament.status = automatedTournamentStatus(item.tournament);
+    if (item.tournament) {
+      item.tournament.status = automatedTournamentStatus(item.tournament);
+      if (["ready", "live"].includes(item.tournament.status) && !item.tournament.checkInFinalizedAt) {
+        finalizeCheckInState(item);
+      }
+    }
   });
-  if (state.tournament) state.tournament.status = automatedTournamentStatus(state.tournament);
+  if (state.tournament) {
+    state.tournament.status = automatedTournamentStatus(state.tournament);
+    if (["ready", "live"].includes(state.tournament.status) && !state.tournament.checkInFinalizedAt) {
+      finalizeCheckInState(state);
+    }
+  }
+}
+
+function checkedInPlayerList(source = state) {
+  return (source.players || []).filter((player) => player.checkedInAt);
+}
+
+function finalizeCheckInState(target, { force = false } = {}) {
+  if (!target?.tournament) return [];
+  if (target.tournament.checkInFinalizedAt && !force) {
+    return (target.players || []).filter((player) => player.checkedInAt && !player.isSubstitute);
+  }
+  const maxPlayers = Number(target.tournament?.maxPlayers || 256);
+  const checked = checkedInPlayerList(target);
+  const checkedIds = new Set(checked.map((player) => player.id));
+  checked.forEach((player, index) => {
+    player.isSubstitute = index >= maxPlayers;
+    player.didNotCheckIn = false;
+  });
+  (target.players || []).forEach((player) => {
+    if (checkedIds.has(player.id)) return;
+    player.didNotCheckIn = true;
+    player.isSubstitute = true;
+  });
+  target.tournament.checkInFinalizedAt = new Date().toISOString();
+  const hasExistingLobbies = (target.lobbies || []).some((block) => block?.length);
+  if (force || !hasExistingLobbies) {
+    target.lobbies = [];
+    target.lobbyHosts = [];
+    target.results = {};
+    target.reports = [];
+  }
+  return (target.players || []).filter((player) => player.checkedInAt && !player.isSubstitute);
+}
+
+function finalizeCheckInList({ force = false } = {}) {
+  if (!hasTournament()) return [];
+  finalizeCheckInState(state, { force });
+  return getLobbyPlayerPool();
 }
 
 function prunePrematureLobbies() {
@@ -312,6 +386,7 @@ function prunePrematureLobbies() {
 }
 
 function loadTournament(id) {
+  closeDeleteConfirm();
   applyTournamentAutomation();
   syncActiveTournament();
   const target = state.tournaments.find((item) => item.id === id);
@@ -381,14 +456,25 @@ function createTournament() {
 }
 
 function deleteCurrentTournament() {
-  if (!hasTournament()) return;
+  if (!hasTournament()) {
+    notify("削除できません", "削除する大会がありません。", "warn");
+    return;
+  }
+  openDeleteConfirm("current");
+}
+
+function executeDeleteCurrentTournament() {
+  if (!hasTournament()) {
+    notify("削除できません", "削除する大会がありません。", "warn");
+    return;
+  }
   const name = state.tournament.name || "現在の大会";
-  const typed = prompt(`注意: 「${name}」を削除します。\n参加者、ロビー、結果、提出レポートも消えます。\n削除する場合は 大会削除 と入力してください。`);
-  if (typed !== "大会削除") return;
+  exportStateBackup("before-delete-tournament");
   state.tournaments = state.tournaments.filter((item) => item.id !== state.activeTournamentId);
   if (!state.tournaments.length) {
     clearActiveTournament();
     render();
+    notify("大会を削除しました", `「${name}」を削除しました。`, "success");
     return;
   }
   const next = state.tournaments[0];
@@ -400,15 +486,69 @@ function deleteCurrentTournament() {
   state.results = structuredClone(next.results);
   state.reports = structuredClone(next.reports);
   render();
+  notify("大会を削除しました", `「${name}」を削除しました。`, "success");
 }
 
 function deleteAllTournaments() {
-  if (!state.tournaments.length && !hasTournament()) return;
-  const typed = prompt("注意: 作成済みの大会をすべて削除します。\n参加者、ロビー、結果、提出レポートもすべて消えます。\n削除する場合は 全部削除 と入力してください。");
-  if (typed !== "全部削除") return;
+  if (!state.tournaments.length && !hasTournament()) {
+    notify("削除できません", "削除する大会がありません。", "warn");
+    return;
+  }
+  openDeleteConfirm("all");
+}
+
+function executeDeleteAllTournaments() {
+  if (!state.tournaments.length && !hasTournament()) {
+    notify("削除できません", "削除する大会がありません。", "warn");
+    return;
+  }
+  exportStateBackup("before-delete-all");
   clearActiveTournament();
   render();
   go("admin");
+  notify("全大会を削除しました", "作成済みの大会をすべて削除しました。", "success");
+}
+
+function openDeleteConfirm(mode) {
+  if (!els.deleteConfirmDialog) return;
+  pendingDeleteMode = mode;
+  const isAll = mode === "all";
+  const targetName = isAll ? `${state.tournaments.length || 0}件の大会すべて` : state.tournament?.name || "現在の大会";
+  const requiredText = isAll ? "全部削除" : "大会削除";
+  els.deleteConfirmTitle.textContent = isAll ? "大会を全部削除" : "現在の大会を削除";
+  els.deleteConfirmText.textContent = isAll
+    ? "作成済みの大会、参加者、ロビー、結果、提出履歴をすべて削除します。"
+    : "選択中の大会、参加者、ロビー、結果、提出履歴を削除します。";
+  els.deleteConfirmTarget.textContent = targetName;
+  els.deleteConfirmInput.value = "";
+  els.deleteConfirmInput.placeholder = `${requiredText} と入力`;
+  els.deleteConfirmExecuteBtn.disabled = true;
+  els.deleteConfirmExecuteBtn.textContent = isAll ? "全部削除する" : "大会を削除する";
+  els.deleteConfirmDialog.showModal();
+  setTimeout(() => els.deleteConfirmInput.focus(), 50);
+}
+
+function updateDeleteConfirmState() {
+  if (!els.deleteConfirmExecuteBtn) return;
+  const requiredText = pendingDeleteMode === "all" ? "全部削除" : "大会削除";
+  els.deleteConfirmExecuteBtn.disabled = els.deleteConfirmInput.value.trim() !== requiredText;
+}
+
+function executePendingDelete() {
+  const mode = pendingDeleteMode;
+  const requiredText = mode === "all" ? "全部削除" : "大会削除";
+  if (els.deleteConfirmInput.value.trim() !== requiredText) {
+    notify("確認テキストが違います", `${requiredText} と入力してください。`, "warn");
+    return;
+  }
+  closeDeleteConfirm();
+  if (mode === "all") executeDeleteAllTournaments();
+  else executeDeleteCurrentTournament();
+}
+
+function closeDeleteConfirm() {
+  pendingDeleteMode = "";
+  if (els.deleteConfirmDialog?.open) els.deleteConfirmDialog.close();
 }
 
 function clearActiveTournament() {
@@ -422,8 +562,288 @@ function clearActiveTournament() {
   state.tournaments = [];
 }
 
+function exportStateBackup(reason = "manual-export") {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tftrise-${reason}-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function requestStateBackups(action, payload = {}) {
+  const pin = prompt("管理PINを入力してください。");
+  if (!pin) return null;
+  const response = await fetch("/api/state-backups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, action, pin }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    notify("バックアップ操作失敗", result.message || "バックアップ操作に失敗しました。", "error");
+    return null;
+  }
+  return result;
+}
+
+async function loadStateBackups() {
+  if (!els.backupsOutput) return;
+  els.backupsOutput.innerHTML = `<div class="empty-state">バックアップを読み込んでいます。</div>`;
+  const result = await requestStateBackups("list");
+  if (!result) {
+    els.backupsOutput.innerHTML = "";
+    return;
+  }
+  renderStateBackups(result.backups || []);
+}
+
+function renderStateBackups(backups) {
+  if (!els.backupsOutput) return;
+  if (!backups.length) {
+    els.backupsOutput.innerHTML = `<div class="empty-state">まだサーバー側バックアップはありません。</div>`;
+    return;
+  }
+  els.backupsOutput.innerHTML = backups.map((backup) => `
+    <article class="backup-item">
+      <div>
+        <strong>${escapeHtml(formatBackupDate(backup.created_at))}</strong>
+        <span>${escapeHtml(backup.reason || "backup")} / ID ${escapeHtml(String(backup.id))}</span>
+      </div>
+      <button class="danger-button restore-backup" type="button" data-backup-id="${escapeHtml(String(backup.id))}">この状態に戻す</button>
+    </article>
+  `).join("");
+}
+
+function formatBackupDate(value) {
+  if (!value) return "日時不明";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function runHealthCheck() {
+  if (!els.healthCheckOutput) return;
+  els.healthCheckOutput.innerHTML = `<div class="empty-state">本番設定を確認しています。</div>`;
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "Health check failed");
+    renderHealthCheck(result);
+  } catch (error) {
+    els.healthCheckOutput.innerHTML = `<div class="empty-state">設定チェックに失敗しました。Vercelへデプロイ後にもう一度確認してください。</div>`;
+  }
+}
+
+function renderHealthCheck(result) {
+  if (!els.healthCheckOutput) return;
+  const checkedAt = result.checkedAt ? formatBackupDate(result.checkedAt) : "未確認";
+  const checks = result.checks || [];
+  els.healthCheckOutput.innerHTML = `
+    <div class="health-summary ${result.ok ? "ok" : "warn"}">
+      <strong>${result.ok ? "本番設定OK" : "未設定または未接続があります"}</strong>
+      <span>${escapeHtml(checkedAt)}</span>
+    </div>
+    <div class="health-check-list">
+      ${checks.map((item) => `
+        <article class="health-check-item ${item.ok ? "ok" : "warn"}">
+          <span>${item.ok ? "OK" : "要確認"}</span>
+          <div><strong>${escapeHtml(item.label || item.key)}</strong><p>${escapeHtml(item.detail || "")}</p></div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function runDataAudit() {
+  if (!els.dataAuditOutput) return;
+  const findings = auditTournamentData();
+  renderDataAudit(findings);
+}
+
+function auditTournamentData() {
+  const findings = [];
+  const tournamentItems = state.tournaments || [];
+  const accountProfiles = Object.values(accounts || {}).map((account) => account.profile).filter(Boolean);
+
+  if (!tournamentItems.length && !hasTournament()) {
+    findings.push({
+      level: "warn",
+      title: "大会が未作成",
+      detail: "正式公開前にテスト大会を1つ作り、エントリーから終了まで通し確認してください。",
+    });
+  }
+
+  const seenTournamentIds = new Set();
+  tournamentItems.forEach((item) => {
+    if (!item.id) {
+      findings.push({ level: "warn", title: "大会IDなし", detail: `${item.tournament?.name || "無題の大会"} にIDがありません。` });
+      return;
+    }
+    if (seenTournamentIds.has(item.id)) findings.push({ level: "error", title: "大会ID重複", detail: `${item.tournament?.name || item.id} のIDが重複しています。` });
+    seenTournamentIds.add(item.id);
+    auditTournamentItem(item, findings);
+  });
+
+  if (hasTournament() && !tournamentItems.some((item) => item.id === state.activeTournamentId)) {
+    findings.push({
+      level: "warn",
+      title: "選択中大会が一覧に同期されていない",
+      detail: "画面を再描画するか、大会情報を保存して同期してください。",
+    });
+  }
+
+  const duplicateLoginIds = findDuplicates(Object.keys(accounts || {}).map((key) => key.toLowerCase()));
+  duplicateLoginIds.forEach((loginId) => findings.push({ level: "warn", title: "ログインID重複", detail: `${loginId} が重複しています。` }));
+
+  const profilesMissingRiot = accountProfiles.filter((profile) => !profile.riotId || !String(profile.riotId).includes("#"));
+  if (profilesMissingRiot.length) {
+    findings.push({
+      level: "warn",
+      title: "Riot ID未完成のアカウント",
+      detail: `${profilesMissingRiot.length}件あります。サモナーネームとタグを確認してください。`,
+    });
+  }
+
+  if (!findings.length) {
+    findings.push({
+      level: "ok",
+      title: "重大な問題なし",
+      detail: "現在の大会データに、運用を止めるような整合性エラーは見つかりませんでした。",
+    });
+  }
+
+  return findings;
+}
+
+function auditTournamentItem(item, findings) {
+  const tournament = item.tournament || {};
+  const players = item.players || [];
+  const lobbies = item.lobbies || [];
+  const results = item.results || {};
+  const playerIds = players.map((player) => player.id).filter(Boolean);
+  const duplicatePlayers = findDuplicates(playerIds);
+
+  if (!tournament.name) findings.push({ level: "warn", title: "大会名未設定", detail: "大会名が空の大会があります。" });
+  if (!tournament.startAt) findings.push({ level: "warn", title: "開始日時未設定", detail: `${tournament.name || "無題の大会"} の開始日時が未設定です。` });
+  if (duplicatePlayers.length) {
+    findings.push({
+      level: "error",
+      title: "参加者ID重複",
+      detail: `${tournament.name || "無題の大会"} に重複IDがあります: ${duplicatePlayers.join(", ")}`,
+    });
+  }
+
+  const missingRiot = players.filter((player) => !player.riotId || !String(player.riotId).includes("#"));
+  if (missingRiot.length) {
+    findings.push({
+      level: "warn",
+      title: "招待に必要なRiot ID不足",
+      detail: `${tournament.name || "無題の大会"} に ${missingRiot.length}名あります。`,
+    });
+  }
+
+  if (["ready", "live", "finished"].includes(tournament.status) && !tournament.checkInFinalizedAt) {
+    findings.push({
+      level: "warn",
+      title: "チェックインリスト未確定",
+      detail: `${tournament.name || "無題の大会"} は開始確認以降ですが、チェックイン確定時刻がありません。`,
+    });
+  }
+
+  if (tournament.status === "live") {
+    const blocks = getLobbyBlocksForTournament(tournament);
+    blocks.forEach((block, index) => {
+      const hasLobby = Boolean(lobbies[index]?.length);
+      const previousComplete = index === 0 || blockGamesComplete(blocks[index - 1], results);
+      if (hasLobby && !previousComplete) {
+        findings.push({
+          level: "error",
+          title: "ロビー先行生成",
+          detail: `${tournament.name || "無題の大会"} の${block.games.join(", ")}試合目ロビーが前ブロック完了前に生成されています。`,
+        });
+      }
+    });
+  }
+
+  Object.entries(results || {}).forEach(([gameNo, placements]) => {
+    const placementsValues = Object.values(placements || {}).map(Number).filter(Boolean);
+    const duplicatePlacements = findDuplicates(placementsValues);
+    if (duplicatePlacements.length) {
+      findings.push({
+        level: "error",
+        title: "同一試合内の着順重複",
+        detail: `${tournament.name || "無題の大会"} Game ${gameNo} に重複着順があります: ${duplicatePlacements.join(", ")}`,
+      });
+    }
+  });
+}
+
+function findDuplicates(values) {
+  const seen = new Set();
+  const duplicates = new Set();
+  values.forEach((value) => {
+    if (seen.has(value)) duplicates.add(value);
+    else seen.add(value);
+  });
+  return [...duplicates];
+}
+
+function getLobbyBlocksForTournament(tournament) {
+  if (tournament?.lobbyRule === "everyGame") {
+    return [1, 2, 3, 4, 5, 6].map((game) => ({ label: `Game ${game}`, games: [game] }));
+  }
+  return BLOCKS;
+}
+
+function blockGamesComplete(block, results) {
+  return (block?.games || []).every((gameNo) => Object.keys(results?.[gameNo] || {}).length > 0);
+}
+
+function renderDataAudit(findings) {
+  if (!els.dataAuditOutput) return;
+  const issueCount = findings.filter((item) => item.level !== "ok").length;
+  els.dataAuditOutput.innerHTML = `
+    <div class="health-summary ${issueCount ? "warn" : "ok"}">
+      <strong>${issueCount ? `${issueCount}件の確認項目があります` : "データ整合性OK"}</strong>
+      <span>${escapeHtml(formatBackupDate(new Date().toISOString()))}</span>
+    </div>
+    <div class="health-check-list">
+      ${findings.map((item) => `
+        <article class="health-check-item ${item.level === "ok" ? "ok" : "warn"} ${item.level === "error" ? "error" : ""}">
+          <span>${item.level === "ok" ? "OK" : item.level === "error" ? "修正" : "確認"}</span>
+          <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function restoreStateBackup(backupId) {
+  if (!backupId) return;
+  const ok = confirm(`バックアップID ${backupId} の状態に共有データを戻します。\n現在の共有データも復旧前に自動バックアップされます。`);
+  if (!ok) return;
+  const result = await requestStateBackups("restore", { id: backupId });
+  if (!result?.data) return;
+  state = { ...defaultState(), ...result.data };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  notify("復旧完了", "バックアップから復旧しました。画面を更新します。", "success");
+  location.reload();
+}
+
 function render() {
   applyTournamentAutomation();
+  if (["ready", "live"].includes(state.tournament?.status) && !state.tournament?.checkInFinalizedAt) {
+    finalizeCheckInList();
+  }
   prunePrematureLobbies();
   if (hasTournament()) syncActiveTournament();
   ensureActiveHomeTournament();
@@ -433,6 +853,7 @@ function render() {
   renderReportSelectors();
   renderMyPage();
   renderAdmin();
+  renderSupportContact();
   renderTopActions();
   saveState();
 }
@@ -623,6 +1044,7 @@ function renderEntryCta(status) {
   const checkInState = checkInWindowState();
   els.entryCtaPanel.dataset.status = status;
   els.homeCheckInBtn.classList.add("hidden");
+  renderEntryCtaSteps(status, user, checkInState, loggedIn);
   if (!hasTournament()) {
     els.entryCtaTitle.textContent = "大会開催待ち";
     els.entryCtaText.textContent = "現在エントリーできる大会はありません。大会が作成されるとここから参加できます。";
@@ -638,6 +1060,14 @@ function renderEntryCta(status) {
     return;
   }
   if (user) {
+    if (user.didNotCheckIn && ["ready", "live", "finished"].includes(status)) {
+      els.entryCtaTitle.textContent = "チェックイン未完了";
+      els.entryCtaText.textContent = `${user.displayName} はチェックイン締切までに確認できなかったため、この大会は自動キャンセル扱いになりました。`;
+      els.homeEntryBtn.textContent = "マイページで確認";
+      els.homeEntryBtn.disabled = false;
+      els.homeCheckInBtn.classList.add("hidden");
+      return;
+    }
     els.entryCtaTitle.textContent = status === "checkin" ? "チェックイン受付中" : "エントリー済み";
     els.entryCtaText.textContent = user.checkedInAt
       ? `${user.displayName} としてチェックイン済みです。`
@@ -677,6 +1107,43 @@ function renderEntryCta(status) {
   els.entryCtaText.textContent = `${currentProfile.displayName} として準備OK。1タップで参戦できます。`;
   els.homeEntryBtn.textContent = "今すぐエントリー";
   els.homeEntryBtn.disabled = false;
+}
+
+function renderEntryCtaSteps(status, user, checkInState, loggedIn) {
+  if (!els.entryCtaSteps) return;
+  const reportTarget = getCurrentReportTarget();
+  const lobbyEntry = user ? findCurrentLobbyEntry(user.id) : null;
+  const currentKey = (() => {
+    if (!hasTournament()) return "wait";
+    if (!loggedIn) return "login";
+    if (!user) return status === "entry" ? "entry" : "closed";
+    if (checkInState.state === "open" && !user.checkedInAt) return "checkin";
+    if (status === "live" && reportTarget) return "report";
+    if (status === "live" && lobbyEntry) return "table";
+    if (status === "ready") return "ready";
+    if (status === "finished") return "done";
+    return "standby";
+  })();
+  const done = {
+    login: loggedIn,
+    entry: Boolean(user),
+    checkin: Boolean(user?.checkedInAt),
+    table: Boolean(lobbyEntry),
+    report: Boolean(reportTarget && state.results?.[reportTarget.game]?.[currentUserId]),
+  };
+  const steps = [
+    { key: "login", label: "ログイン", done: done.login },
+    { key: "entry", label: "エントリー", done: done.entry },
+    { key: "checkin", label: "チェックイン", done: done.checkin },
+    { key: "table", label: "テーブル確認", done: done.table },
+    { key: "report", label: "結果報告", done: done.report },
+  ];
+  els.entryCtaSteps.innerHTML = steps.map((step) => `
+    <span class="${step.done ? "done" : ""} ${step.key === currentKey ? "current" : ""}">
+      <b>${step.done ? "✓" : ""}</b>${escapeHtml(step.label)}
+    </span>
+  `).join("");
+  els.entryCtaPanel.dataset.next = currentKey;
 }
 
 function renderPublicFormatDetails() {
@@ -723,6 +1190,21 @@ function renderPublicFormatDetails() {
     .join("");
   els.publicFormatDetails.append(scoreList);
 
+  const contact = supportContactInfo();
+  const contactSection = document.createElement("section");
+  contactSection.className = "support-contact-card";
+  contactSection.innerHTML = `
+    <div>
+      <span>Support</span>
+      <strong>困った時の連絡先</strong>
+      <p>${escapeHtml(contact.help)}</p>
+    </div>
+    ${contact.url
+      ? `<a class="secondary-button" href="${escapeHtml(contact.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(contact.label)}</a>`
+      : `<span class="support-contact-muted">${escapeHtml(contact.label)}</span>`}
+  `;
+  els.publicFormatDetails.append(contactSection);
+
   if (formatType === "multiDay") {
     const tpc = document.createElement("section");
     tpc.className = "tpc-format-flow";
@@ -733,6 +1215,42 @@ function renderPublicFormatDetails() {
     `;
     els.publicFormatDetails.append(tpc);
   }
+}
+
+function supportContactInfo() {
+  const label = state.tournament?.contactLabel || "運営への連絡";
+  const url = normalizeUrlInput(state.tournament?.contactUrl || "");
+  return {
+    label,
+    url,
+    help: url
+      ? "ロビー、チェックイン、結果報告で困った場合は、こちらから運営へ連絡してください。"
+      : "連絡先URLはまだ設定されていません。大会内の案内または運営の告知を確認してください。",
+  };
+}
+
+function renderSupportContact() {
+  if (!els.supportContactOutput) return;
+  const contact = supportContactInfo();
+  els.supportContactOutput.innerHTML = `
+    <div class="support-contact-card compact">
+      <div>
+        <span>Contact</span>
+        <strong>${escapeHtml(contact.label)}</strong>
+        <p>${escapeHtml(contact.help)}</p>
+      </div>
+      ${contact.url
+        ? `<a class="secondary-button" href="${escapeHtml(contact.url)}" target="_blank" rel="noopener noreferrer">連絡先を開く</a>`
+        : `<span class="support-contact-muted">未設定</span>`}
+    </div>
+  `;
+}
+
+function normalizeUrlInput(value = "") {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
 }
 
 function formatProgressInfo(formatType) {
@@ -1036,7 +1554,7 @@ function getCurrentReportTarget() {
 }
 
 function renderMyPage() {
-  ensureActiveTournamentForMyPage();
+  if (location.hash === "#mypage") ensureActiveTournamentForMyPage();
   const playerId = currentUserId;
   const profile = currentProfile || getPlayer(playerId);
   if (!profile) {
@@ -1069,6 +1587,7 @@ function renderMyPage() {
   const played = history.filter(Boolean).length;
   const standing = calculateStandings().findIndex((row) => row.player.id === playerId) + 1;
   const standingText = played || ["live", "finished"].includes(state.tournament?.status) ? standing || "-" : "-";
+  const checkInLabel = player.checkedInAt ? "済" : player.didNotCheckIn ? "不参加" : "未";
 
   els.mySummary.innerHTML = `
     <article><span>選手</span><strong>${escapeHtml(player.displayName)}</strong></article>
@@ -1107,6 +1626,8 @@ function renderMyProfile(profile) {
   const earnedTitles = Array.isArray(profile.earnedTitles) ? profile.earnedTitles : [];
   const selectedTitle = earnedTitles.includes(profile.selectedTitle) ? profile.selectedTitle : "";
   const selectedTitleName = REWARD_TITLES.find((title) => title.id === selectedTitle)?.name || "";
+  const riotNameValue = summonerName(profile.riotId || "");
+  const riotTagValue = riotTag(profile.riotId || "");
   const earnedTitleOptions = REWARD_TITLES
     .filter((title) => earnedTitles.includes(title.id))
     .map((title) => `<option value="${title.id}" ${selectedTitle === title.id ? "selected" : ""}>${escapeHtml(title.name)}</option>`)
@@ -1136,7 +1657,14 @@ function renderMyProfile(profile) {
       <summary>アカウント情報を編集</summary>
       <form id="profileEditForm" class="profile-edit-form">
         <label>表示名<input name="displayName" required maxlength="32" value="${escapeHtml(profile.displayName || "")}" /></label>
-        <label>Riot ID<input name="riotId" required maxlength="48" value="${escapeHtml(profile.riotId || "")}" /></label>
+        <div class="form-field riot-id-field">
+          <span>Riot ID</span>
+          <div class="riot-id-split">
+            <input name="riotName" required maxlength="32" placeholder="サモナーネーム" value="${escapeHtml(riotNameValue)}" />
+            <b>#</b>
+            <input name="riotTag" required maxlength="12" placeholder="JP1" value="${escapeHtml(riotTagValue)}" />
+          </div>
+        </div>
         <label>Discord ID<input name="discordId" required maxlength="48" value="${escapeHtml(profile.discordId || "")}" /></label>
         <label>X（任意）<input name="xAccount" maxlength="32" value="${escapeHtml(profile.xAccount || "")}" /></label>
         <button class="primary-button" type="submit">保存する</button>
@@ -1188,6 +1716,10 @@ function renderNextAction(player) {
   }
   const status = state.tournament.status;
   const checkInState = checkInWindowState();
+  if (player.didNotCheckIn && ["ready", "live", "finished"].includes(status)) {
+    els.myNextAction.innerHTML = nextActionMarkup("チェックイン未完了", "締切までにチェックインできなかったため、この大会は自動キャンセル扱いです。次の大会で再エントリーしてください。", "home", "大会へ戻る");
+    return;
+  }
   if (!player.checkedInAt && checkInState.state === "open") {
     els.myNextAction.innerHTML = nextActionMarkup("チェックイン受付中", "大会開始前の30分間です。参加するなら今チェックインしてください。", "", "チェックイン", "check-in-now");
     return;
@@ -1238,6 +1770,7 @@ function renderPastResults(profile) {
       const row = standings[standingIndex];
       const history = row?.history || [1, 2, 3, 4, 5, 6].map((gameNo) => Number(tour.results[gameNo]?.[player.id] || 0));
       const played = history.filter(Boolean).length;
+      if (player.didNotCheckIn && !played) return null;
       const points = row?.points || history.reduce((sum, placement) => sum + scoreForPlacement(placement), 0);
       return {
         tour,
@@ -1254,7 +1787,7 @@ function renderPastResults(profile) {
 
   els.myPastResultsOutput.innerHTML = `<h3>大会成績</h3>`;
   if (!rows.length) {
-    els.myPastResultsOutput.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ大会成績はありません。</div>`);
+    els.myPastResultsOutput.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ大会成績はありません。自動キャンセルになった大会は成績に表示されません。</div>`);
     return;
   }
   rows.forEach((row) => {
@@ -1329,10 +1862,68 @@ function getDisplayAvatar(profile) {
   return profile?.specialAvatarUrl || DEFAULT_AVATAR_URL;
 }
 
+function randomSalt() {
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    bytes.forEach((_, index) => {
+      bytes[index] = Math.floor(Math.random() * 256);
+    });
+  }
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPassword(password, salt) {
+  const payload = new TextEncoder().encode(`${salt}:${password}`);
+  if (!globalThis.crypto?.subtle?.digest) return fallbackHashPassword(password, salt);
+  const digest = await crypto.subtle.digest("SHA-256", payload);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function fallbackHashPassword(password, salt) {
+  const input = `${salt}:${password}`;
+  let hashA = 0x811c9dc5;
+  let hashB = 0x45d9f3b;
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    hashA ^= code;
+    hashA = Math.imul(hashA, 0x01000193) >>> 0;
+    hashB ^= code + index;
+    hashB = Math.imul(hashB, 0x85ebca6b) >>> 0;
+  }
+  return `${hashA.toString(16).padStart(8, "0")}${hashB.toString(16).padStart(8, "0")}`;
+}
+
+async function createPasswordRecord(password) {
+  const salt = randomSalt();
+  return {
+    version: globalThis.crypto?.subtle?.digest ? "sha256-salt-v1" : "local-http-fallback-v1",
+    salt,
+    hash: await hashPassword(password, salt),
+  };
+}
+
+async function verifyAccountPassword(account, password) {
+  if (!account) return { ok: false };
+  if (account.passwordHash?.salt && account.passwordHash?.hash) {
+    const hash = await hashPassword(password, account.passwordHash.salt);
+    return { ok: hash === account.passwordHash.hash };
+  }
+  if (account.password && account.password === password) {
+    return { ok: true, migratedPasswordHash: await createPasswordRecord(password) };
+  }
+  return { ok: false };
+}
+
 function updateCurrentProfile(profileInput) {
   if (!currentProfile) return;
   if (!profileInput.displayName || !profileInput.riotId || !profileInput.discordId) {
-    alert("表示名、Riot ID、Discord IDは必須です。");
+    notify("入力不足", "表示名、Riot ID、Discord IDは必須です。", "warn");
+    return;
+  }
+  if (!isValidRiotId(profileInput.riotId)) {
+    notify("Riot IDを確認", "サモナーネーム#タグ の形式で入力してください。例: SummonerName#JP1", "warn");
     return;
   }
 
@@ -1389,7 +1980,7 @@ function updateRewardCosmetics(formInput) {
   const earnedTitles = Array.isArray(currentProfile.earnedTitles) ? currentProfile.earnedTitles : [];
   const selectedTitle = String(formInput.selectedTitle || "");
   if (selectedTitle && !earnedTitles.includes(selectedTitle)) {
-    alert("未獲得の称号は設定できません。");
+    notify("称号未獲得", "未獲得の称号は設定できません。", "warn");
     return;
   }
   currentProfile = {
@@ -1406,34 +1997,35 @@ function updateRewardCosmetics(formInput) {
   render();
 }
 
-function updateAccountSecurity(formInput) {
+async function updateAccountSecurity(formInput) {
   if (!currentProfile) return;
   const accountEmail = String(formInput.accountEmail || "").trim();
   const newPassword = String(formInput.newPassword || "");
   const confirmPassword = String(formInput.confirmPassword || "");
   if (accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)) {
-    alert("有効なメールアドレスを入力してください。");
+    notify("メールアドレスを確認", "有効なメールアドレスを入力してください。", "warn");
     return;
   }
   if (newPassword || confirmPassword) {
     if (newPassword.length < 6) {
-      alert("新しいパスワードは6文字以上で入力してください。");
+      notify("パスワードを確認", "新しいパスワードは6文字以上で入力してください。", "warn");
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert("確認用パスワードが一致していません。");
+      notify("パスワード不一致", "確認用パスワードが一致していません。", "warn");
       return;
     }
   }
 
   const entries = getCurrentAccountEntries();
-  const primaryAccount = entries[0]?.[1] || { password: newPassword || "", profile: currentProfile };
+  const passwordHash = newPassword ? await createPasswordRecord(newPassword) : null;
+  const primaryAccount = entries[0]?.[1] || { profile: currentProfile };
   const emailKey = normalize(accountEmail);
   if (emailKey) {
     const duplicate = accounts[emailKey];
     const duplicateMatchesCurrent = entries.some(([key]) => key === emailKey);
     if (duplicate && !duplicateMatchesCurrent) {
-      alert("このメールアドレスは別のアカウントで使用されています。");
+      notify("メールアドレス使用中", "このメールアドレスは別のアカウントで使用されています。", "warn");
       return;
     }
   }
@@ -1453,13 +2045,14 @@ function updateAccountSecurity(formInput) {
     const account = accounts[key] || primaryAccount;
     accounts[key] = {
       ...account,
-      password: newPassword || account.password || primaryAccount.password,
+      passwordHash: passwordHash || account.passwordHash || primaryAccount.passwordHash,
       profile: currentProfile,
     };
+    if (passwordHash) delete accounts[key].password;
   });
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   render();
-  alert("アカウント保守情報を保存しました。");
+  notify("保存しました", "アカウント保守情報を保存しました。", "success");
 }
 
 function removePlayerFromTournament(playerId) {
@@ -1481,11 +2074,11 @@ function cancelCurrentEntry() {
   const player = getPlayer(currentUserId);
   if (!player) return;
   if (player.checkedInAt) {
-    alert("チェックイン後は大会進行に影響するため、エントリーをキャンセルできません。");
+    notify("キャンセル不可", "チェックイン後は大会進行に影響するため、エントリーをキャンセルできません。", "warn");
     return;
   }
   if (state.tournament?.status !== "entry") {
-    alert("エントリー受付終了後はキャンセルできません。");
+    notify("キャンセル不可", "エントリー受付終了後はキャンセルできません。", "warn");
     return;
   }
   if (!confirm("この大会のエントリーをキャンセルしますか？")) return;
@@ -1496,36 +2089,51 @@ function cancelCurrentEntry() {
   go("mypage");
 }
 
-function authLoginOrRegister(loginId, password, profileInput) {
+async function authLoginOrRegister(loginId, password, profileInput) {
   const key = normalize(loginId);
-  if (!key || !password) return;
+  if (!key || !password) return false;
   const existing = accounts[key];
   if (authMode === "login" && !existing) {
     authMode = "register";
     renderAuthMode();
     els.authLoginId.value = loginId;
     els.authPassword.value = password;
-    alert("アカウントが見つかりません。新規登録に切り替えました。表示名、Riot ID、Discord IDを入力して登録してください。");
-    return;
+    notify("新規登録へ切替", "表示名、Riot ID、Discord IDを入力して登録してください。", "warn");
+    return false;
   }
-  if (existing && existing.password !== password) {
-    alert("パスワードが違います。");
-    return;
+  if (existing) {
+    const verification = await verifyAccountPassword(existing, password);
+    if (!verification.ok) {
+      notify("ログイン失敗", "パスワードが違います。", "error");
+      return false;
+    }
+    if (verification.migratedPasswordHash) {
+      existing.passwordHash = verification.migratedPasswordHash;
+      delete existing.password;
+      accounts[key] = existing;
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    }
   }
   if (authMode === "register" && existing) {
-    alert("このユーザー名またはメールアドレスは登録済みです。ログインを選んでください。");
-    return;
+    notify("登録済み", "このユーザー名またはメールアドレスは登録済みです。ログインを選んでください。", "warn");
+    return false;
   }
   if (authMode === "register" && (!profileInput.displayName || !profileInput.riotId || !profileInput.discordId)) {
-    alert("新規登録には表示名、Riot ID、Discord IDが必要です。");
-    return;
+    notify("入力不足", "新規登録には表示名、Riot ID、Discord IDが必要です。", "warn");
+    return false;
+  }
+  if (authMode === "register" && !isValidRiotId(profileInput.riotId)) {
+    notify("Riot IDを確認", "サモナーネーム#タグ の形式で入力してください。例: SummonerName#JP1", "warn");
+    return false;
   }
   const profile = existing?.profile || {
     ...profileInput,
     accountEmail: key.includes("@") ? loginId : "",
   };
   if (key.includes("@") && !profile.accountEmail) profile.accountEmail = loginId;
-  accounts[key] = { password, profile };
+  accounts[key] = existing
+    ? { ...existing, profile }
+    : { passwordHash: await createPasswordRecord(password), profile };
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   currentProfile = profile;
   localStorage.setItem(PROFILE_KEY, JSON.stringify(currentProfile));
@@ -1535,12 +2143,13 @@ function authLoginOrRegister(loginId, password, profileInput) {
   else localStorage.removeItem(SESSION_KEY);
   render();
   go("home");
+  return true;
 }
 
 function quickEnterCurrentProfile() {
   if (!currentProfile) return;
   if (!hasTournament()) {
-    alert("現在エントリーできる大会はありません。");
+    notify("大会開催待ち", "現在エントリーできる大会はありません。", "warn");
     return;
   }
   const normalizedRiot = normalize(currentProfile.riotId);
@@ -1575,13 +2184,18 @@ function completeEntryOnHome() {
 }
 
 function showEntryCompleteCue() {
-  showToast("エントリー完了", "右上のマイページから、チェックインや自分のテーブルを確認できます。");
+  showToast("エントリー完了", "右上のマイページから、チェックインや自分のテーブルを確認できます。", "success");
   els.myPageTopBtn.classList.add("attention");
 }
 
-function showToast(title, text) {
+function notify(title, text, type = "warn") {
+  showToast(title, text, type);
+}
+
+function showToast(title, text, type = "success") {
   els.entryCompleteToast.querySelector("strong").textContent = title;
   els.entryCompleteToast.querySelector("span").textContent = text;
+  els.entryCompleteToast.dataset.type = type;
   els.entryCompleteToast.classList.remove("hidden");
   els.entryCompleteToast.classList.add("show");
   clearTimeout(showEntryCompleteCue.timer);
@@ -1603,17 +2217,28 @@ function requestEntryWithNotice() {
   }
   renderEntryNoticeTimeline();
   els.entryTimelineConfirm.checked = false;
+  if (els.entryRuleConfirm) els.entryRuleConfirm.checked = false;
   els.entryNoticeAgreeBtn.disabled = true;
   els.entryNoticeDialog.showModal();
 }
 
 function acceptEntryNotice() {
   if (!els.entryTimelineConfirm.checked) {
-    alert("大会タイムラインを確認してからエントリーしてください。");
+    notify("確認が必要です", "大会タイムラインを確認してからエントリーしてください。", "warn");
+    return;
+  }
+  if (els.entryRuleConfirm && !els.entryRuleConfirm.checked) {
+    notify("同意が必要です", "大会参加ルールと禁止事項に同意してからエントリーしてください。", "warn");
     return;
   }
   els.entryNoticeDialog.close();
   completeEntryOnHome();
+}
+
+function updateEntryNoticeAgreeState() {
+  if (!els.entryNoticeAgreeBtn || !els.entryTimelineConfirm) return;
+  const ruleOk = els.entryRuleConfirm ? els.entryRuleConfirm.checked : true;
+  els.entryNoticeAgreeBtn.disabled = !(els.entryTimelineConfirm.checked && ruleOk);
 }
 
 function checkInWindowState() {
@@ -1634,10 +2259,11 @@ function performCheckIn() {
   if (!user) return;
   const windowState = checkInWindowState();
   if (windowState.state !== "open") {
-    alert(windowState.message);
+    notify("チェックイン不可", windowState.message, "warn");
     return;
   }
   user.checkedInAt = new Date().toISOString();
+  user.didNotCheckIn = false;
   if (els.checkInDialog.open) els.checkInDialog.close();
   render();
 }
@@ -1696,7 +2322,7 @@ function renderMyLobbies(playerId) {
       const li = document.createElement("li");
       li.className = id === playerId ? "is-me" : "";
       li.innerHTML = player
-        ? playerRiotCopyMarkup(player)
+        ? (id === playerId ? playerRiotDisplayMarkup(player) : playerRiotCopyMarkup(player))
         : `<span>削除済み</span>`;
       ol.append(li);
     });
@@ -1762,6 +2388,8 @@ function renderManualFallback() {
 }
 
 function renderAdmin() {
+  renderAdminAccess();
+  renderAdminOpsChecklist();
   renderTournamentList();
   renderTournamentForm();
   renderPlayersTable();
@@ -1771,20 +2399,336 @@ function renderAdmin() {
   renderStandings();
 }
 
+function renderAdminOpsChecklist() {
+  if (!els.adminOpsChecklist) return;
+  if (els.startReadinessOutput) els.startReadinessOutput.innerHTML = "";
+  if (!hasTournament()) {
+    renderAdminNextAction({
+      eyebrow: "SETUP",
+      title: "まず大会を作成",
+      text: "大会がまだありません。大会名、開始日時、形式を決めて開催準備を始めましょう。",
+      action: "新しい大会を作成",
+      actionKey: "create-tournament",
+      tone: "warn",
+    });
+    els.adminOpsChecklist.innerHTML = `
+      <article class="admin-ops-item current">
+        <span>1</span>
+        <div><strong>新しい大会を作成</strong><p>大会名、開始日時、形式、定員を設定して保存してください。</p></div>
+      </article>
+    `;
+    return;
+  }
+
+  const status = state.tournament.status || "entry";
+  const checkedIn = checkedInPlayerList().length;
+  const activePlayers = getLobbyPlayerPool().length;
+  const blocks = getLobbyBlocks();
+  const currentBlockIndex = Math.max(0, blocks.findIndex((_, index) => !isBlockComplete(index)));
+  const currentBlock = blocks[currentBlockIndex] || blocks[0];
+  const hasCurrentLobby = Boolean(state.lobbies?.[currentBlockIndex]?.length);
+  const entriesClosed = ["checkin", "ready", "live", "finished"].includes(status);
+  renderAdminNextAction(getAdminNextAction({
+    status,
+    checkedIn,
+    activePlayers,
+    currentBlock,
+    currentBlockIndex,
+    hasCurrentLobby,
+  }));
+
+  const items = [
+    {
+      done: Boolean(state.tournament.startAt),
+      title: "大会情報を確定",
+      text: `${state.tournament.name || "無題の大会"} / ${formatStartAt(state.tournament.startAt)} / ${formatTypeLabel(state.tournament.formatType)}`,
+      current: !state.tournament.startAt,
+    },
+    {
+      done: state.players.length > 0,
+      title: "エントリー状況を確認",
+      text: `${state.players.length}名エントリー。定員は${state.tournament.maxPlayers || 256}名です。`,
+      current: status === "entry",
+    },
+    {
+      done: entriesClosed ? checkedIn > 0 : false,
+      title: "チェックインリストを確認",
+      text: entriesClosed ? `${checkedIn}名チェックイン / 正式参加 ${activePlayers}名` : "開始30分前になるとチェックイン受付に自動で切り替わります。",
+      current: status === "checkin" || status === "ready",
+    },
+    {
+      done: status === "live" || status === "finished",
+      title: "大会開始",
+      text: status === "ready" ? "チェックインリスト確認後に「大会開始」を押してください。" : "開始後は必要なロビーだけ順番に生成されます。",
+      current: status === "ready",
+    },
+    {
+      done: status === "finished",
+      title: "進行・集計",
+      text: status === "live"
+        ? `${currentBlock?.games?.join(", ") || "次"}試合目 / ${hasCurrentLobby ? "ロビー生成済み" : "次ロビー生成待ち"}`
+        : "結果報告が揃ったら次ロビー生成、全試合完了後に大会終了。",
+      current: status === "live",
+    },
+  ];
+
+  els.adminOpsChecklist.innerHTML = items.map((item, index) => `
+    <article class="admin-ops-item ${item.done ? "done" : ""} ${item.current ? "current" : ""}">
+      <span>${item.done ? "✓" : index + 1}</span>
+      <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.text)}</p></div>
+    </article>
+  `).join("");
+}
+
+function getAdminNextAction({ status, checkedIn, activePlayers, currentBlock, currentBlockIndex, hasCurrentLobby }) {
+  if (!state.tournament.startAt) {
+    return {
+      eyebrow: "MISSING",
+      title: "開始日時を設定",
+      text: "ユーザー側のエントリー期間、チェックイン期間、タイムラインが決まりません。先に大会情報を保存してください。",
+      action: "大会情報へ",
+      actionKey: "focus-tournament-form",
+      tone: "warn",
+    };
+  }
+  if (status === "entry") {
+    return {
+      eyebrow: "ENTRY",
+      title: "エントリー受付中",
+      text: `${state.players.length}名がエントリー中です。開始30分前になるとチェックイン受付へ自動で切り替わります。`,
+      action: "参加者を確認",
+      actionKey: "focus-players",
+      tone: "info",
+    };
+  }
+  if (status === "checkin") {
+    return {
+      eyebrow: "CHECK-IN",
+      title: "チェックイン受付中",
+      text: `${checkedIn}名がチェックイン済みです。受付終了後、正式参加リストを確認してから大会開始へ進みます。`,
+      action: "開始前チェック",
+      actionKey: "show-start-check",
+      tone: checkedIn ? "info" : "warn",
+    };
+  }
+  if (status === "ready") {
+    return {
+      eyebrow: "READY",
+      title: "開始確認待ち",
+      text: `${activePlayers}名で開始予定です。必須情報とチェックインリストを確認して、大会を開始してください。`,
+      action: "大会開始",
+      actionKey: "start-tournament",
+      tone: "danger",
+    };
+  }
+  if (status === "live") {
+    if (!hasCurrentLobby) {
+      return {
+        eyebrow: "LOBBY",
+        title: "次のロビー生成待ち",
+        text: `${currentBlock?.games?.join("・") || "次"}試合目のロビーを生成できます。前ブロック完了前の先行生成は防止されています。`,
+        action: "次ロビー生成",
+        actionKey: "generate-next-lobby",
+        tone: "danger",
+      };
+    }
+    if (currentBlock && !isBlockComplete(currentBlockIndex)) {
+      return {
+        eyebrow: "REPORT",
+        title: "結果報告待ち",
+        text: `${currentBlock.games.join("・")}試合目の結果を確認中です。報告が揃ったら次のロビー生成へ進めます。`,
+        action: "結果を確認",
+        actionKey: "focus-results",
+        tone: "info",
+      };
+    }
+    return {
+      eyebrow: "FINISH",
+      title: "全試合完了",
+      text: "全ブロックの結果が揃いました。最終順位を確認して大会を終了できます。",
+      action: "大会終了",
+      actionKey: "finish-tournament",
+      tone: "warn",
+    };
+  }
+  if (status === "finished") {
+    return {
+      eyebrow: "DONE",
+      title: "大会終了済み",
+      text: "記録ページに最終順位が反映されています。必要ならバックアップや提出履歴を確認してください。",
+      action: "記録を見る",
+      actionKey: "go-records",
+      tone: "ok",
+    };
+  }
+  return {
+    eyebrow: "STATUS",
+    title: "大会状況を確認",
+    text: "大会の状態に合わせて、次の作業をここに表示します。",
+    action: "大会情報へ",
+    actionKey: "focus-tournament-form",
+    tone: "info",
+  };
+}
+
+function renderAdminNextAction(action) {
+  if (!els.adminNextAction || !action) return;
+  els.adminNextAction.innerHTML = `
+    <div class="admin-next-copy">
+      <span>${escapeHtml(action.eyebrow)}</span>
+      <strong>${escapeHtml(action.title)}</strong>
+      <p>${escapeHtml(action.text)}</p>
+    </div>
+    <button class="primary-button admin-next-button" type="button" data-admin-action="${escapeHtml(action.actionKey)}">${escapeHtml(action.action)}</button>
+  `;
+  els.adminNextAction.dataset.tone = action.tone || "info";
+}
+
+function executeAdminNextAction(actionKey) {
+  if (actionKey === "create-tournament") {
+    createTournament();
+    return;
+  }
+  if (actionKey === "focus-tournament-form") {
+    scrollAdminTarget(els.tournamentForm);
+    els.tournamentName?.focus();
+    return;
+  }
+  if (actionKey === "focus-players") {
+    scrollAdminTarget(els.playersTable);
+    return;
+  }
+  if (actionKey === "show-start-check") {
+    renderStartReadiness(validateTournamentStart());
+    scrollAdminTarget(els.startReadinessOutput);
+    return;
+  }
+  if (actionKey === "start-tournament") {
+    setTournamentStatus("live");
+    return;
+  }
+  if (actionKey === "generate-next-lobby") {
+    if (!generateNextLobbyBlock()) {
+      notify("生成できません", "前の試合結果が揃っていないか、生成できるロビーがありません。", "warn");
+      render();
+    }
+    return;
+  }
+  if (actionKey === "focus-results") {
+    scrollAdminTarget(els.adminResultsOutput);
+    return;
+  }
+  if (actionKey === "finish-tournament") {
+    setTournamentStatus("finished");
+    return;
+  }
+  if (actionKey === "go-records") {
+    go("past");
+  }
+}
+
+function scrollAdminTarget(target) {
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderStartReadiness(check = validateTournamentStart()) {
+  if (!els.startReadinessOutput) return;
+  const hasIssues = check.blockers.length || check.warnings.length;
+  if (!hasIssues) {
+    els.startReadinessOutput.innerHTML = `
+      <div class="start-readiness ok">
+        <strong>大会開始チェックOK</strong>
+        <p>チェックイン済み ${check.officialCount}名で開始できます。</p>
+      </div>
+    `;
+    return;
+  }
+  els.startReadinessOutput.innerHTML = `
+    <div class="start-readiness ${check.blockers.length ? "error" : "warn"}">
+      <strong>${check.blockers.length ? "大会開始前に修正が必要" : "大会開始前の注意"}</strong>
+      <p>チェックイン済み ${check.checkedCount}名 / 正式参加予定 ${check.officialCount}名</p>
+      ${check.blockers.length ? `<ul>${check.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      ${check.warnings.length ? `<ul>${check.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+    </div>
+  `;
+}
+
+function renderAdminAccess() {
+  const unlocked = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+  els.adminLock.classList.toggle("hidden", unlocked);
+  els.adminConsole.classList.toggle("hidden", !unlocked);
+}
+
+async function unlockAdminConsole(pin = "") {
+  const inputPin = String(pin || "").trim();
+  if (!inputPin) {
+    notify("管理PINが必要", "管理PINを入力してください。", "warn");
+    return false;
+  }
+  if (isLocalPreview() && inputPin === LOCAL_ADMIN_PIN) {
+    sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+    renderAdminAccess();
+    notify("管理画面を開きました", "ローカル確認用PINで解除しました。", "success");
+    return true;
+  }
+  try {
+    const response = await fetch("/api/admin-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: inputPin }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      notify("管理解除失敗", result.message || "管理PINが違います。", "error");
+      return false;
+    }
+    sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+    renderAdminAccess();
+    return true;
+  } catch (_) {
+    notify("管理認証に接続できません", "ローカル確認では Yuuya1228、本番ではVercelのADMIN_PINを使ってください。", "error");
+    return false;
+  }
+}
+
+window.unlockAdminConsole = unlockAdminConsole;
+
+function isLocalPreview() {
+  return ["127.0.0.1", "localhost", ""].includes(location.hostname);
+}
+
 function renderTournamentList() {
   els.tournamentList.innerHTML = "";
+  const hasAnyTournament = state.tournaments.length || hasTournament();
+  if (els.deleteTournamentBtn) {
+    els.deleteTournamentBtn.disabled = !hasTournament();
+    els.deleteTournamentBtn.title = hasTournament() ? "選択中の大会を削除します" : "削除する大会がありません";
+  }
+  if (els.deleteAllTournamentsBtn) {
+    els.deleteAllTournamentsBtn.disabled = !hasAnyTournament;
+    els.deleteAllTournamentsBtn.title = hasAnyTournament ? "作成済みの大会をすべて削除します" : "削除する大会がありません";
+  }
   if (!state.tournaments.length) {
     els.tournamentList.innerHTML = `<div class="empty-state">まだ大会は作成されていません。「新しい大会を作成」から開催準備を始めてください。</div>`;
     return;
   }
   state.tournaments.forEach((item) => {
     const button = document.createElement("button");
-    button.className = `tournament-list-item ${item.id === state.activeTournamentId ? "active" : ""}`;
+    const isActive = item.id === state.activeTournamentId;
+    button.className = `tournament-list-item ${isActive ? "active" : ""}`;
     button.type = "button";
     button.dataset.id = item.id;
+    button.title = `${item.tournament.name || "大会"}を管理対象にする`;
+    if (isActive) button.setAttribute("aria-current", "true");
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      loadTournament(item.id);
+    });
     button.innerHTML = `
       <strong>${escapeHtml(item.tournament.name || "無題の大会")}</strong>
       <span>${statusLabel(item.tournament.status)} / ${formatStartAt(item.tournament.startAt)}</span>
+      <em class="tournament-list-select">${isActive ? "選択中" : "選択"}</em>
     `;
     els.tournamentList.append(button);
   });
@@ -1798,6 +2742,8 @@ function renderTournamentForm() {
     els.tournamentFormatType.value = "sixGame";
     els.tournamentMaxPlayers.value = 256;
     els.tournamentLobbyRule.value = "every2Games";
+    if (els.tournamentContactLabel) els.tournamentContactLabel.value = "運営Discord";
+    if (els.tournamentContactUrl) els.tournamentContactUrl.value = "";
     els.formatStages.innerHTML = `<div class="empty-state">編集する大会がありません。</div>`;
     return;
   }
@@ -1807,23 +2753,78 @@ function renderTournamentForm() {
   els.tournamentFormatType.value = state.tournament.formatType === "openSwiss" ? "sixGame" : state.tournament.formatType || "sixGame";
   els.tournamentMaxPlayers.value = state.tournament.maxPlayers || 256;
   els.tournamentLobbyRule.value = state.tournament.lobbyRule || defaultLobbyRuleForFormat(state.tournament.formatType);
+  if (els.tournamentContactLabel) els.tournamentContactLabel.value = state.tournament.contactLabel || "運営Discord";
+  if (els.tournamentContactUrl) els.tournamentContactUrl.value = state.tournament.contactUrl || "";
   renderFormatStages();
 }
 
 function setTournamentStatus(status) {
   if (!hasTournament()) {
-    alert("先に大会を作成してください。");
+    notify("大会がありません", "先に大会を作成してください。", "warn");
     return;
   }
-  if (status === "live" && !confirm("チェックイン状況を確認しましたか？\n大会を開始すると最初のロビーだけ自動生成され、ユーザー側にテーブル情報が表示されます。")) return;
-  if (status === "live" && !getLobbyPlayerPool().length) {
-    alert("参加者がいないためロビーを生成できません。エントリーまたはチェックイン状況を確認してください。");
-    return;
+  if (status === "live") {
+    const startCheck = validateTournamentStart();
+    if (startCheck.blockers.length) {
+      notify("大会開始前の確認が必要", startCheck.blockers[0], "error");
+      renderStartReadiness(startCheck);
+      go("admin");
+      return;
+    }
+    const warningText = startCheck.warnings.length ? `\n\n注意:\n${startCheck.warnings.map((item) => `・${item}`).join("\n")}` : "";
+    if (!confirm(`チェックイン状況を確認しましたか？\n大会を開始すると最初のロビーだけ自動生成され、ユーザー側にテーブル情報が表示されます。${warningText}`)) return;
+    finalizeCheckInList({ force: true });
+  }
+  if (["entry", "checkin"].includes(status)) {
+    delete state.tournament.checkInFinalizedAt;
+    const maxPlayers = Number(state.tournament?.maxPlayers || 256);
+    state.players.forEach((player, index) => {
+      player.didNotCheckIn = false;
+      player.isSubstitute = index >= maxPlayers;
+    });
+    state.lobbies = [];
+    state.lobbyHosts = [];
+    state.results = {};
+    state.reports = [];
   }
   state.tournament.status = status;
   if (status === "live") generateNextLobbyBlock({ silent: true });
   render();
   go("home");
+}
+
+function validateTournamentStart() {
+  const blockers = [];
+  const warnings = [];
+  if (!hasTournament()) blockers.push("先に大会を作成してください。");
+  if (!state.tournament?.startAt) blockers.push("開始日時が未設定です。");
+
+  const checked = checkedInPlayerList();
+  const maxPlayers = Number(state.tournament?.maxPlayers || 256);
+  const officialPlayers = checked.slice(0, maxPlayers);
+  if (!officialPlayers.length) blockers.push("チェックイン済みの参加者がいません。");
+  if (officialPlayers.length && officialPlayers.length < 8) warnings.push(`チェックイン済みが${officialPlayers.length}名です。8名未満で開始する場合は手動運用が必要です。`);
+
+  const missingRequired = officialPlayers.filter((player) => !player.displayName || !player.riotId || !player.discordId);
+  if (missingRequired.length) blockers.push(`表示名、Riot ID、Discord IDが不足している参加者が${missingRequired.length}名います。`);
+
+  const invalidRiot = officialPlayers.filter((player) => player.riotId && !isValidRiotId(player.riotId));
+  if (invalidRiot.length) blockers.push(`Riot IDの形式が不正な参加者が${invalidRiot.length}名います。`);
+
+  const existingLobbyCount = (state.lobbies || []).reduce((sum, block) => sum + (block?.length || 0), 0);
+  const existingResultCount = Object.values(state.results || {}).reduce((sum, game) => sum + Object.keys(game || {}).length, 0);
+  if (existingLobbyCount || existingResultCount || state.reports?.length) {
+    warnings.push("既存のロビー、結果、提出履歴があります。開始時に現在のロビー/結果/提出履歴は初期化されます。");
+  }
+
+  return {
+    blockers,
+    warnings,
+    checkedCount: checked.length,
+    officialCount: officialPlayers.length,
+    missingRequired,
+    invalidRiot,
+  };
 }
 
 function renderFormatStages() {
@@ -1844,22 +2845,85 @@ function renderFormatStages() {
 function renderPlayersTable() {
   els.playersTable.innerHTML = "";
   if (!state.players.length) {
-    els.playersTable.innerHTML = `<tr><td colspan="5">まだ参加者が登録されていません。</td></tr>`;
+    els.playersTable.innerHTML = `<tr><td colspan="8">まだ参加者が登録されていません。</td></tr>`;
     return;
   }
 
   state.players.forEach((player) => {
     const row = document.createElement("tr");
+    const checkInLabel = player.checkedInAt ? "済" : player.didNotCheckIn ? "未 / 不参加" : "未";
+    row.dataset.playerRow = player.id;
     row.innerHTML = `
       <td><button class="sub-toggle ${player.isSubstitute ? "is-sub" : ""}" type="button" data-id="${player.id}">${player.isSubstitute ? "補欠" : "参加"}</button></td>
-      <td><strong>${escapeHtml(player.displayName)}</strong></td>
-      <td>${escapeHtml(player.riotId || "-")}</td>
-      <td>${escapeHtml(player.discordId)}</td>
-      <td>${escapeHtml(player.xAccount || "-")}</td>
+      <td>${escapeHtml(checkInLabel)}</td>
+      <td><input class="admin-player-input" data-id="${escapeHtml(player.id)}" data-field="displayName" value="${escapeHtml(player.displayName || "")}" aria-label="表示名" /></td>
+      <td><input class="admin-player-input" data-id="${escapeHtml(player.id)}" data-field="riotId" value="${escapeHtml(player.riotId || "")}" aria-label="Riot ID" /></td>
+      <td><input class="admin-player-input" data-id="${escapeHtml(player.id)}" data-field="discordId" value="${escapeHtml(player.discordId || "")}" aria-label="Discord ID" /></td>
+      <td><input class="admin-player-input" data-id="${escapeHtml(player.id)}" data-field="xAccount" value="${escapeHtml(player.xAccount || "")}" aria-label="X" /></td>
+      <td><input class="admin-player-input" type="email" data-id="${escapeHtml(player.id)}" data-field="accountEmail" value="${escapeHtml(player.accountEmail || "")}" aria-label="メール" /></td>
       <td><button class="remove-player" type="button" data-id="${player.id}">×</button></td>
     `;
     els.playersTable.append(row);
   });
+}
+
+function updateAdminPlayerField(playerId, field, value) {
+  const allowed = new Set(["displayName", "riotId", "discordId", "xAccount", "accountEmail"]);
+  if (!allowed.has(field)) return;
+  const player = getPlayer(playerId);
+  if (!player) return;
+  const nextValue = String(value || "").trim();
+  if (["displayName", "riotId", "discordId"].includes(field) && !nextValue) {
+    notify("入力不足", "表示名、Riot ID、Discord IDは空にできません。", "warn");
+    renderPlayersTable();
+    return;
+  }
+  if (field === "riotId" && !isValidRiotId(nextValue)) {
+    notify("Riot IDを確認", "サモナーネーム#タグ の形式で入力してください。例: SummonerName#JP1", "warn");
+    renderPlayersTable();
+    return;
+  }
+  if (field === "accountEmail" && nextValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextValue)) {
+    notify("メールアドレスを確認", "有効なメールアドレスを入力してください。", "warn");
+    renderPlayersTable();
+    return;
+  }
+
+  const previous = { ...player };
+  player[field] = nextValue;
+  updatePlayerInSnapshots(playerId, field, nextValue);
+  syncAccountProfileFromAdmin(previous, { ...previous, [field]: nextValue });
+  if (currentUserId === playerId) {
+    currentProfile = { ...(currentProfile || {}), [field]: nextValue };
+    persistCurrentProfile();
+  } else {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  }
+  notify("参加者情報を更新", `${player.displayName || "参加者"} の情報を保存しました。`, "success");
+  render();
+}
+
+function updatePlayerInSnapshots(playerId, field, value) {
+  (state.tournaments || []).forEach((item) => {
+    (item.players || []).forEach((player) => {
+      if (player.id === playerId) player[field] = value;
+    });
+  });
+}
+
+function syncAccountProfileFromAdmin(previous, updated) {
+  Object.keys(accounts || {}).forEach((key) => {
+    const profile = accounts[key]?.profile;
+    if (!profileMatchesPlayer(profile, previous)) return;
+    accounts[key].profile = { ...profile, ...updated };
+  });
+}
+
+function profileMatchesPlayer(profile, player) {
+  if (!profile || !player) return false;
+  return [profile.riotId, profile.discordId, profile.displayName]
+    .filter(Boolean)
+    .some((value) => [player.riotId, player.discordId, player.displayName].some((target) => normalize(value) && normalize(value) === normalize(target)));
 }
 
 function renderLobbyGenerateButtons() {
@@ -1904,28 +2968,45 @@ function renderAdminResults() {
   els.adminResultsOutput.innerHTML = "";
   const history = document.createElement("section");
   history.className = "report-history";
-  history.innerHTML = `<h4>提出履歴</h4>`;
+  history.innerHTML = `
+    <div class="report-history-head">
+      <div>
+        <h4>提出履歴</h4>
+        <p>誰が、どの試合・ロビーを、画像/手動どちらで提出したか確認できます。</p>
+      </div>
+      <span>${state.reports.length}件</span>
+    </div>
+  `;
   if (!state.reports.length) {
     history.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ結果報告はありません。</div>`);
   } else {
-    state.reports.slice(0, 12).forEach((report) => {
+    state.reports.slice(0, 24).forEach((report) => {
       const submitter = report.submitter || {};
-      const winner = getPlayer(report.winnerId);
+      const winner = getPlayer(report.winnerId) || (submitter.id ? getPlayer(submitter.id) : null);
+      const matchSummary = summarizeReportMatches(report.matches || []);
       const item = document.createElement("article");
-      item.className = "report-history-item";
+      item.className = `report-history-item ${report.method === "image" ? "is-image" : "is-manual"}`;
       item.innerHTML = `
-        <div>
-          <strong>Game ${report.game} / Lobby ${report.lobby}</strong>
-          <span>${report.method === "image" ? "スクリーンショット提出" : "手動提出"} / ${formatReportTime(report.submittedAt)}</span>
+        <div class="report-history-main">
+          <span class="report-method">${report.method === "image" ? "画像提出" : "手動提出"}</span>
+          <strong>${escapeHtml(report.tournamentName || state.tournament?.name || "大会未選択")} / Game ${escapeHtml(String(report.game || "-"))} / Lobby ${escapeHtml(String(report.lobby || "-"))}</strong>
+          <small>${escapeHtml(formatReportTime(report.submittedAt))}</small>
         </div>
-        <div>
+        <div class="report-history-person">
           <span>提出者</span>
           <strong>${escapeHtml(submitter.displayName || "不明")}</strong>
           <small>${escapeHtml([submitter.riotId, submitter.discordId].filter(Boolean).join(" / ") || "-")}</small>
+          ${submitter.xAccount ? `<small>${escapeHtml(submitter.xAccount)}</small>` : ""}
         </div>
-        <div>
-          <span>提出アカウント</span>
+        <div class="report-history-person">
+          <span>報告者アカウント</span>
           <strong>${escapeHtml(winner?.displayName || "未選択")}</strong>
+          <small>${escapeHtml(winner?.riotId || submitter.riotId || "-")}</small>
+        </div>
+        <div class="report-history-matches">
+          <span>提出内容</span>
+          <strong>${matchSummary.count}名 / ${matchSummary.completeness}</strong>
+          <small>${escapeHtml(matchSummary.text)}</small>
         </div>
       `;
       history.append(item);
@@ -1964,6 +3045,25 @@ function renderAdminResults() {
 
     els.adminResultsOutput.append(card);
   });
+}
+
+function summarizeReportMatches(matches) {
+  const normalized = (matches || [])
+    .map((match) => {
+      const player = getPlayer(match.playerId);
+      return {
+        placement: Number(match.placement),
+        name: summonerName(player?.riotId || "") || player?.displayName || "不明",
+      };
+    })
+    .filter((match) => match.placement)
+    .sort((a, b) => a.placement - b.placement);
+  const count = normalized.length;
+  const completeness = count >= 8 ? "8名分" : count >= 4 ? "確認可" : "要確認";
+  const text = normalized.length
+    ? normalized.map((match) => `${match.placement}位 ${match.name}`).join(" / ")
+    : "提出内容なし";
+  return { count, completeness, text };
 }
 
 function renderStandings() {
@@ -2016,6 +3116,8 @@ function submitOcrReport() {
   if (!latestReportMatches.length) return setReportStatus("認識結果がありません。先に画像認識してください。");
   const gameNo = els.reportGame.value;
   if (!gameNo) return setReportStatus("あなたの現在の報告対象ロビーがありません。");
+  const validation = validateReportMatches(latestReportMatches);
+  if (!validation.ok) return setReportStatus(validation.message);
   state.results[gameNo] = state.results[gameNo] || {};
   latestReportMatches.forEach((match) => {
     state.results[gameNo][match.playerId] = String(match.placement);
@@ -2035,6 +3137,8 @@ function submitManualReport() {
     .map((select) => ({ playerId: select.dataset.player, placement: Number(select.value), confidence: 1 }))
     .filter((match) => match.placement);
   if (!matches.length) return setReportStatus("手動報告の着順が未入力です。");
+  const validation = validateReportMatches(matches);
+  if (!validation.ok) return setReportStatus(validation.message);
 
   state.results[gameNo] = state.results[gameNo] || {};
   matches.forEach((match) => {
@@ -2053,6 +3157,8 @@ function addReport(method, matches) {
   const target = getCurrentReportTarget();
   state.reports.unshift({
     id: uid(),
+    tournamentId: state.activeTournamentId || state.tournament?.id || "",
+    tournamentName: state.tournament?.name || "",
     method,
     game: target?.game || Number(els.reportGame.value),
     lobby: target ? target.lobbyIndex + 1 : Number(els.reportLobby.value) + 1,
@@ -2069,6 +3175,47 @@ function addReport(method, matches) {
   });
 }
 
+function validateReportMatches(matches) {
+  const target = getCurrentReportTarget();
+  if (!target) return { ok: false, message: "あなたの現在の報告対象ロビーがありません。" };
+  const lobbyIds = new Set(target.lobby || []);
+  const normalized = (matches || []).filter((match) => match.playerId && match.placement);
+  if (!normalized.length) return { ok: false, message: "着順が未入力です。" };
+
+  const outsidePlayers = normalized.filter((match) => !lobbyIds.has(match.playerId));
+  if (outsidePlayers.length) {
+    return { ok: false, message: "報告対象ロビー外の選手が含まれています。ロビー情報を確認してください。" };
+  }
+
+  const duplicatePlayers = findDuplicates(normalized.map((match) => match.playerId));
+  if (duplicatePlayers.length) {
+    return { ok: false, message: "同じ選手が複数回入っています。認識結果または手動入力を確認してください。" };
+  }
+
+  const placements = normalized.map((match) => Number(match.placement));
+  const invalidPlacement = placements.find((placement) => !Number.isInteger(placement) || placement < 1 || placement > 8);
+  if (invalidPlacement) {
+    return { ok: false, message: "着順は1位から8位で入力してください。" };
+  }
+
+  const duplicatePlacements = findDuplicates(placements);
+  if (duplicatePlacements.length) {
+    return { ok: false, message: `同じ着順が重複しています: ${duplicatePlacements.join(", ")}位` };
+  }
+
+  const existing = state.results?.[target.game] || {};
+  const alreadyReported = normalized.filter((match) => existing[match.playerId]);
+  if (alreadyReported.length) {
+    return { ok: false, message: "この試合はすでに一部結果が入っています。修正が必要な場合は管理者へ連絡してください。" };
+  }
+
+  if (normalized.length < Math.min(4, target.lobby.length)) {
+    return { ok: false, message: "認識人数が少なすぎます。画像を撮り直すか、画像を提出できない場合のみ手動報告してください。" };
+  }
+
+  return { ok: true, message: "" };
+}
+
 function formatReportTime(value) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -2081,12 +3228,20 @@ function formatReportTime(value) {
 
 function renderReportMatches() {
   els.reportMatches.innerHTML = "";
+  const validation = latestReportMatches.length ? validateReportMatches(latestReportMatches) : { ok: true };
   latestReportMatches.forEach((match) => {
     const player = getPlayer(match.playerId);
     const li = document.createElement("li");
     li.textContent = `${match.placement}位: ${player?.displayName || "不明"} (${Math.round(match.confidence * 100)}%)`;
     els.reportMatches.append(li);
   });
+  els.reportMatches.classList.toggle("has-report-warning", !validation.ok);
+  if (!validation.ok) {
+    const li = document.createElement("li");
+    li.className = "report-warning-row";
+    li.textContent = validation.message;
+    els.reportMatches.append(li);
+  }
 }
 
 function setReportStatus(message) {
@@ -2104,8 +3259,10 @@ function readStageRows() {
 
 function getLobbyPlayerPool() {
   const mainPlayers = state.players.filter((player) => !player.isSubstitute);
-  const checkedInPlayers = mainPlayers.filter((player) => player.checkedInAt);
-  return checkedInPlayers.length ? checkedInPlayers : mainPlayers;
+  if (["checkin", "ready", "live", "finished"].includes(state.tournament?.status)) {
+    return mainPlayers.filter((player) => player.checkedInAt);
+  }
+  return [];
 }
 
 function isBlockComplete(blockIndex) {
@@ -2293,6 +3450,17 @@ function summonerName(riotId = "") {
 function riotTag(riotId = "") {
   const parts = String(riotId).split("#");
   return (parts[1] || "").trim();
+}
+
+function combineRiotId(name = "", tag = "") {
+  const cleanName = String(name).trim();
+  const cleanTag = String(tag).trim().replace(/^#/, "");
+  return cleanName && cleanTag ? `${cleanName}#${cleanTag}` : "";
+}
+
+function isValidRiotId(riotId = "") {
+  const [name, tag, ...rest] = String(riotId).trim().split("#");
+  return Boolean(name?.trim() && tag?.trim() && !rest.length);
 }
 
 function playerRiotCopyMarkup(player) {
@@ -2555,8 +3723,9 @@ els.homeEntryBtn.addEventListener("click", () => {
 els.entryNoticeAgreeBtn.addEventListener("click", acceptEntryNotice);
 els.entryNoticeCancelBtn.addEventListener("click", () => els.entryNoticeDialog.close());
 els.entryTimelineConfirm.addEventListener("change", () => {
-  els.entryNoticeAgreeBtn.disabled = !els.entryTimelineConfirm.checked;
+  updateEntryNoticeAgreeState();
 });
+els.entryRuleConfirm?.addEventListener("change", updateEntryNoticeAgreeState);
 els.entryNoticeDialog.addEventListener("click", (event) => {
   if (event.target === els.entryNoticeDialog) els.entryNoticeDialog.close();
 });
@@ -2597,6 +3766,10 @@ window.addEventListener("hashchange", () => {
 });
 
 els.adminOpenBtn.addEventListener("click", () => go("admin"));
+document.querySelector("#ownerOptionsBtn")?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  go("admin");
+});
 els.logoutTopBtn.addEventListener("click", () => {
   currentUserId = "";
   currentProfile = null;
@@ -2618,12 +3791,12 @@ els.myNextAction.addEventListener("click", (event) => {
   const goButton = event.target.closest("[data-go]");
   if (goButton) go(goButton.dataset.go);
 });
-els.myProfileOutput.addEventListener("submit", (event) => {
+els.myProfileOutput.addEventListener("submit", async (event) => {
   if (!["profileEditForm", "accountSecurityForm", "rewardCosmeticsForm"].includes(event.target.id)) return;
   event.preventDefault();
   const form = new FormData(event.target);
   if (event.target.id === "accountSecurityForm") {
-    updateAccountSecurity({
+    await updateAccountSecurity({
       accountEmail: form.get("accountEmail"),
       newPassword: form.get("newPassword"),
       confirmPassword: form.get("confirmPassword"),
@@ -2638,22 +3811,26 @@ els.myProfileOutput.addEventListener("submit", (event) => {
   }
   updateCurrentProfile({
     displayName: String(form.get("displayName") || "").trim(),
-    riotId: String(form.get("riotId") || "").trim(),
+    riotId: combineRiotId(form.get("riotName"), form.get("riotTag")),
     discordId: String(form.get("discordId") || "").trim(),
     xAccount: String(form.get("xAccount") || "").trim(),
   });
 });
 
 els.adminLoginBtn.addEventListener("click", () => {
-  if (els.adminPin.value !== ADMIN_PIN) return;
-  els.adminLock.classList.add("hidden");
-  els.adminConsole.classList.remove("hidden");
+  unlockAdminConsole(els.adminPin.value);
+});
+
+els.adminNextAction?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-action]");
+  if (!button) return;
+  executeAdminNextAction(button.dataset.adminAction);
 });
 
 els.tournamentForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!hasTournament()) {
-    alert("先に「新しい大会を作成」を押してください。");
+    notify("大会がありません", "先に「新しい大会を作成」を押してください。", "warn");
     return;
   }
   state.tournament = {
@@ -2664,6 +3841,8 @@ els.tournamentForm.addEventListener("submit", (event) => {
     formatType: els.tournamentFormatType.value === "openSwiss" ? "sixGame" : els.tournamentFormatType.value,
     maxPlayers: Math.min(256, Math.max(8, Number(els.tournamentMaxPlayers.value || 256))),
     lobbyRule: els.tournamentLobbyRule.value,
+    contactLabel: els.tournamentContactLabel?.value.trim() || "運営Discord",
+    contactUrl: normalizeUrlInput(els.tournamentContactUrl?.value || ""),
     stages: readStageRows(),
   };
   render();
@@ -2673,9 +3852,22 @@ els.tournamentForm.addEventListener("submit", (event) => {
 els.createTournamentBtn.addEventListener("click", createTournament);
 els.deleteTournamentBtn.addEventListener("click", deleteCurrentTournament);
 els.deleteAllTournamentsBtn.addEventListener("click", deleteAllTournaments);
+els.deleteConfirmInput?.addEventListener("input", updateDeleteConfirmState);
+els.deleteConfirmExecuteBtn?.addEventListener("click", executePendingDelete);
+els.deleteConfirmCancelBtn?.addEventListener("click", closeDeleteConfirm);
+els.deleteConfirmDialog?.addEventListener("click", (event) => {
+  if (event.target === els.deleteConfirmDialog) {
+    closeDeleteConfirm();
+  }
+});
+els.deleteConfirmDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeDeleteConfirm();
+});
 els.tournamentList.addEventListener("click", (event) => {
   const button = event.target.closest(".tournament-list-item");
   if (!button) return;
+  closeDeleteConfirm();
   loadTournament(button.dataset.id);
 });
 
@@ -2687,6 +3879,7 @@ els.tournamentCarousel.addEventListener("click", (event) => {
   }
   const button = event.target.closest(".tournament-slide");
   if (!button || button.classList.contains("active")) return;
+  closeDeleteConfirm();
   loadTournament(button.dataset.tournamentId);
   go("home");
 });
@@ -2753,15 +3946,64 @@ els.formatStages.addEventListener("click", (event) => {
   renderFormatStages();
 });
 
-els.authForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  authLoginOrRegister(els.authLoginId.value.trim(), els.authPassword.value, {
+async function submitAuthForm() {
+  const loginId = els.authLoginId.value.trim();
+  const password = els.authPassword.value;
+  const profileInput = {
     displayName: els.authDisplayName.value.trim(),
-    riotId: els.authRiotId.value.trim(),
+    riotId: combineRiotId(els.authRiotName.value, els.authRiotTag.value),
     discordId: els.authDiscordId.value.trim(),
     xAccount: els.authXAccount.value.trim(),
-  });
-  els.authForm.reset();
+  };
+  if (!loginId) {
+    notify("入力不足", "ユーザー名またはメールアドレスを入力してください。", "warn");
+    els.authLoginId.focus();
+    return;
+  }
+  if (!password) {
+    notify("入力不足", "パスワードを入力してください。", "warn");
+    els.authPassword.focus();
+    return;
+  }
+  if (authMode === "register") {
+    if (!profileInput.displayName) {
+      notify("入力不足", "表示名を入力してください。", "warn");
+      els.authDisplayName.focus();
+      return;
+    }
+    if (!els.authRiotName.value.trim() || !els.authRiotTag.value.trim()) {
+      notify("入力不足", "Riot IDはサモナーネームと#タグの両方を入力してください。", "warn");
+      (els.authRiotName.value.trim() ? els.authRiotTag : els.authRiotName).focus();
+      return;
+    }
+    if (!profileInput.discordId) {
+      notify("入力不足", "Discord IDを入力してください。", "warn");
+      els.authDiscordId.focus();
+      return;
+    }
+  }
+  const authenticated = await authLoginOrRegister(loginId, password, profileInput);
+  if (authenticated) els.authForm.reset();
+}
+
+els.authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await submitAuthForm();
+  } catch (error) {
+    console.error(error);
+    notify("登録に失敗しました", "ブラウザの保存機能でエラーが出ました。ページを更新してもう一度試してください。", "error");
+  }
+});
+
+els.authSubmitBtn.addEventListener("click", async (event) => {
+  event.preventDefault();
+  try {
+    await submitAuthForm();
+  } catch (error) {
+    console.error(error);
+    notify("登録に失敗しました", "ブラウザの保存機能でエラーが出ました。ページを更新してもう一度試してください。", "error");
+  }
 });
 
 els.reportGame.addEventListener("change", renderReportSelectors);
@@ -2787,6 +4029,12 @@ els.reportImage.addEventListener("change", () => {
 els.analyzeReportBtn.addEventListener("click", () => analyzeReportImage().catch(() => setReportStatus("画像解析に失敗しました。手動報告を使ってください。")));
 els.submitOcrBtn.addEventListener("click", submitOcrReport);
 els.submitManualBtn.addEventListener("click", submitManualReport);
+
+els.playersTable.addEventListener("change", (event) => {
+  const input = event.target.closest(".admin-player-input");
+  if (!input) return;
+  updateAdminPlayerField(input.dataset.id, input.dataset.field, input.value);
+});
 
 els.playersTable.addEventListener("click", (event) => {
   const subButton = event.target.closest(".sub-toggle");
@@ -2822,13 +4070,7 @@ els.adminResultsOutput.addEventListener("change", (event) => {
 });
 
 els.exportBtn.addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `space-gods-cup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  exportStateBackup("manual-export");
 });
 
 els.importFile.addEventListener("change", async (event) => {
@@ -2838,17 +4080,27 @@ els.importFile.addEventListener("change", async (event) => {
     state = { ...defaultState(), ...JSON.parse(await file.text()) };
     render();
   } catch {
-    alert("JSONを読み込めませんでした。");
+    notify("JSON読込失敗", "JSONを読み込めませんでした。", "error");
   } finally {
     event.target.value = "";
   }
 });
 
 els.resetBtn.addEventListener("click", () => {
-  if (!confirm("大会データをすべて初期化しますか？")) return;
+  if (!confirm("大会データをすべて初期化しますか？\n初期化前にバックアップJSONを自動保存します。")) return;
+  exportStateBackup("before-reset");
   state = defaultState();
   render();
 });
+
+els.loadBackupsBtn?.addEventListener("click", loadStateBackups);
+els.backupsOutput?.addEventListener("click", (event) => {
+  const button = event.target.closest(".restore-backup");
+  if (!button) return;
+  restoreStateBackup(button.dataset.backupId);
+});
+els.runHealthCheckBtn?.addEventListener("click", runHealthCheck);
+els.runDataAuditBtn?.addEventListener("click", runDataAudit);
 
 go(location.hash.replace("#", "") || "home");
 render();

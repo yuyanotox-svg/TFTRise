@@ -1,42 +1,615 @@
-(function(){
-const STORAGE_KEY="tft-space-gods-cup",REMOTE_STATE_ID="tftrise-main",HYDRATED_KEY="tftrise-remote-hydrated",ACCOUNTS_KEY="tftrise-accounts",PROFILE_KEY="tftrise-profile",ADMIN_PIN="Yuuya1228";
-let supabaseClient=null,saveTimer=null,lastSaved="";const originalSetItem=localStorage.setItem.bind(localStorage);
-const REWARDS=[{rank:"優勝",points:100,item:"実装予定アイテム"},{rank:"2位",points:70,item:"実装予定アイテム"},{rank:"3位",points:55,item:"実装予定アイテム"},{rank:"4位",points:45,item:"実装予定アイテム"},{rank:"5-8位",points:25,item:"実装予定アイテム"},{rank:"9-16位",points:10,item:"実装予定アイテム"}];
-installEnhancements();
-localStorage.setItem=function(key,value){originalSetItem(key,value);if(key===STORAGE_KEY){scheduleSave(value);setTimeout(installRecords,0);setTimeout(lockRewardCosmetics,0)}};
-initRemoteSync().catch((e)=>console.warn("TFTRise remote sync disabled:",e));
-async function initRemoteSync(){const r=await fetch("/api/config",{cache:"no-store"});if(!r.ok)return;const c=await r.json();if(!c.supabaseUrl||!c.supabaseAnonKey)return;const{createClient}=await import("https://esm.sh/@supabase/supabase-js@2");supabaseClient=createClient(c.supabaseUrl,c.supabaseAnonKey);await hydrateFromRemote();scheduleSave(localStorage.getItem(STORAGE_KEY)||"")}
-async function hydrateFromRemote(){const{data,error}=await supabaseClient.from("app_state").select("data").eq("id",REMOTE_STATE_ID).maybeSingle();if(error)throw error;if(!data?.data)return;const remoteJson=JSON.stringify(data.data),localJson=localStorage.getItem(STORAGE_KEY)||"";lastSaved=remoteJson;if(remoteJson&&remoteJson!==localJson&&sessionStorage.getItem(HYDRATED_KEY)!==remoteJson){sessionStorage.setItem(HYDRATED_KEY,remoteJson);originalSetItem(STORAGE_KEY,remoteJson);location.reload()}}
-function scheduleSave(value){if(!supabaseClient||!value||value===lastSaved)return;clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveRemoteState(value).catch((e)=>console.warn("TFTRise remote save failed:",e)),700)}
-async function saveRemoteState(value){if(!supabaseClient||!value||value===lastSaved)return;const parsed=JSON.parse(value);const{error}=await supabaseClient.from("app_state").upsert({id:REMOTE_STATE_ID,data:parsed,updated_at:new Date().toISOString()});if(error)throw error;lastSaved=value}
-function installEnhancements(){const css=document.createElement("style");css.textContent=`
-#adminOpenBtn{display:none!important}.public-nav{align-items:center!important}.nav-button{min-width:118px!important;min-height:48px!important}.nav-button[data-go="home"]{min-width:154px!important;min-height:54px!important;border-color:rgba(239,197,109,.76)!important;color:#160d05!important;background:linear-gradient(180deg,#ffe28f,#e5a93e)!important;box-shadow:0 14px 30px rgba(239,197,109,.18)!important;font-size:1rem!important}.nav-button[data-go="home"].active,.nav-button[data-go="home"]:hover{color:#160d05!important;background:linear-gradient(180deg,#fff0b4,#f0bd52)!important}.owner-options-text{width:100%;justify-content:center}.system-panel{display:grid;gap:12px;max-width:920px}.system-card{border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px;background:rgba(255,255,255,.035)}.system-card:not([open]){background:rgba(255,255,255,.025)!important}.system-card[open]{border-color:rgba(88,199,255,.22)!important}.system-card summary{cursor:pointer;color:#f7fbff;font-weight:900}.system-card p,.system-card li{color:#aab7cb;line-height:1.75}.system-card ul{margin:10px 0 0;padding-left:18px}.owner-system-card{max-width:360px}.admin-player-input{width:min(190px,100%);min-height:34px;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 9px;color:#f7fbff;background:rgba(5,10,22,.72);font:inherit}.records-dashboard{display:grid;gap:14px}.records-title,.archive-section-head,.records-board-head,.reward-detail-head{display:flex;gap:12px;align-items:end;justify-content:space-between}.records-title h3,.archive-section-head h3{color:#f7fbff;font-size:clamp(1.35rem,3vw,2rem)}.records-title>span{border:1px solid rgba(239,197,109,.34);border-radius:999px;padding:7px 12px;color:#efc56d;background:rgba(239,197,109,.08);font-weight:900}.records-leaderboards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.records-board{display:grid;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:12px;background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(231,248,255,.9));box-shadow:0 18px 46px rgba(0,0,0,.18)}.records-board-head{align-items:start}.records-board-head span{color:#667085;font-size:.76rem;font-weight:800}.records-board-head strong{color:#172033;font-size:1.08rem}.records-board-list{display:grid;gap:7px}.records-player-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:38px;border:1px solid rgba(23,32,51,.08);border-radius:8px;padding:6px 8px;background:rgba(255,255,255,.7)}.records-player-row.is-current{border-color:rgba(239,197,109,.7);background:linear-gradient(90deg,#fff2bd,#e7f8ff)}.records-player-row b{display:grid;place-items:center;width:24px;height:24px;border-radius:999px;color:#101828;background:rgba(239,197,109,.42)}.records-player-row span{overflow:hidden;color:#172033;text-overflow:ellipsis;white-space:nowrap;font-weight:900}.records-player-row strong{color:#b71f3a}.reward-policy-strip,.reward-detail-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.reward-policy-strip article,.reward-detail-grid article{display:grid;gap:4px;border:1px solid rgba(239,197,109,.22);border-radius:8px;padding:10px;background:rgba(239,197,109,.08)}.reward-policy-strip span,.reward-detail-grid span,.reward-policy-strip small,.reward-detail-grid small{color:#b8b1c6;font-size:.76rem}.reward-policy-strip strong,.reward-detail-grid strong{color:#efc56d;font-size:1.1rem}.tournament-reward-detail{display:grid;gap:10px;border:1px solid rgba(239,197,109,.24);border-radius:8px;padding:12px;background:rgba(239,197,109,.055)}.reward-detail-head{align-items:start;flex-direction:column}.reward-detail-head span{color:#efc56d;font-size:.76rem;font-weight:900;text-transform:uppercase}.reward-detail-head strong{color:#fff4dc;font-size:1.1rem}.reward-detail-head p{color:#b8b1c6}@media(max-width:640px){.site-header{grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;padding:10px 12px!important}.brand{grid-column:1!important;order:1!important;min-width:0!important;overflow:hidden!important}.brand-mark{width:34px!important;height:34px!important;min-width:34px!important}.brand-subtitle{display:none!important}.mypage-top-button{grid-column:2!important;order:1!important;width:96px!important;min-width:96px!important;max-width:96px!important;min-height:38px!important;padding:7px 8px!important;white-space:nowrap!important;word-break:keep-all!important;overflow:hidden!important;text-align:center!important;font-size:.78rem!important}.public-nav{grid-column:1/-1!important;order:2!important;display:grid!important;grid-template-columns:minmax(116px,1.35fr) repeat(2,minmax(82px,.85fr))!important;gap:7px!important;width:100%!important;overflow:visible!important}.nav-button{min-width:0!important;width:100%!important;min-height:38px!important;padding:7px 8px!important;font-size:.82rem!important}.nav-button[data-go="home"]{min-width:0!important;min-height:46px!important;font-size:.92rem!important}.tournament-card,.hero{min-height:0!important}.hero{gap:14px!important;padding:18px 14px!important;border-radius:8px!important;background-position:center top!important}.hero h1{font-size:clamp(2rem,10vw,3rem)!important;line-height:1.02!important}.hero p{font-size:.9rem!important}.format-box{grid-template-columns:1fr!important;gap:6px!important;padding:10px!important}.format-box strong{font-size:1.08rem!important}.entry-cta-panel{grid-template-columns:1fr!important;padding:16px!important;border-color:rgba(239,197,109,.42)!important;background:linear-gradient(135deg,rgba(239,197,109,.13),rgba(88,199,255,.07))!important}.entry-cta-button{width:100%!important;min-height:48px!important}.records-leaderboards,.reward-policy-strip,.reward-detail-grid{grid-template-columns:1fr!important}.records-title,.archive-section-head{align-items:start!important;flex-direction:column!important}.records-board{padding:10px!important}.mypage-panel{gap:10px!important;padding:10px!important}.profile-primary{padding:10px!important}.profile-primary h3,.my-lobby-output h3,.my-history-output h3,.my-past-results-output h3{margin:0!important;font-size:1rem!important}.profile-hero{align-items:center!important;gap:10px!important;padding:10px!important}.profile-avatar-wrap{width:58px!important;height:58px!important;border-radius:12px!important}.profile-avatar{border-radius:12px!important}.profile-hero strong{font-size:1.14rem!important}.profile-hero em,.profile-hero p{font-size:.72rem!important}.profile-grid,.my-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}.profile-grid article,.my-summary article,.past-result-card{padding:9px!important;gap:5px!important}.profile-grid span,.my-summary span,.past-result-card span{font-size:.7rem!important}.profile-grid strong,.my-summary strong,.past-result-card strong{font-size:.9rem!important;overflow-wrap:anywhere!important}.mypage-main-grid{display:flex!important;flex-direction:column!important;gap:10px!important}.mypage-right-stack{order:1!important;gap:10px!important}.mypage-left-stack{order:2!important;gap:10px!important}.next-action-card,.entry-cancel-card,.my-lobby-tournament,.my-lobby-card{padding:10px!important}.my-lobby-head{grid-template-columns:1fr!important}.my-lobby-head strong{min-height:36px!important;font-size:1.2rem!important}.my-lobby-card li{padding:8px!important}}
-`;document.head.appendChild(css);const boot=()=>{const admin=document.querySelector("#adminOpenBtn");if(admin){ensureSystemScreen(admin);installAdminGate(admin)}installAdminUserEditor();installRecords();lockRewardCosmetics();setTimeout(installRecords,600);setTimeout(lockRewardCosmetics,700)};document.readyState==="loading"?document.addEventListener("DOMContentLoaded",boot):boot()}
-function installAdminGate(admin){if(document.querySelector("#ownerOptionsBtn"))return;const mount=document.querySelector("#ownerSystemMount");if(!mount)return;const btn=document.createElement("button");btn.id="ownerOptionsBtn";btn.className="secondary-button owner-options-text";btn.type="button";btn.setAttribute("aria-label","開設者オプション");btn.title="開設者オプション";btn.textContent="管理画面を開く";admin.classList.add("hidden");mount.appendChild(btn);btn.addEventListener("click",(e)=>{e.stopPropagation();admin.click()});const login=document.querySelector("#adminLoginBtn"),pin=document.querySelector("#adminPin"),lock=document.querySelector("#adminLock"),consoleEl=document.querySelector("#adminConsole");if(pin)pin.placeholder="管理PIN";login?.addEventListener("click",(e)=>{e.stopImmediatePropagation();if(pin?.value!==ADMIN_PIN)return;lock?.classList.add("hidden");consoleEl?.classList.remove("hidden")},true)}
-function ensureSystemScreen(admin){if(!document.querySelector("[data-go='system']")){const nav=document.querySelector(".public-nav"),report=document.querySelector("#reportNavBtn"),btn=document.createElement("button");btn.className="nav-button";btn.type="button";btn.dataset.go="system";btn.textContent="システム";btn.addEventListener("click",(e)=>{e.preventDefault();openSystemScreen()});nav?.insertBefore(btn,report||null)}if(document.querySelector("#system")){if(!document.querySelector("#ownerSystemMount"))document.querySelector(".owner-system-card")?.insertAdjacentHTML("beforeend",'<div id="ownerSystemMount"></div>');return}const system=document.createElement("section");system.id="system";system.className="screen";system.innerHTML=`<div class="page-heading"><p class="eyebrow">System</p><h2>システム</h2><p>利用規約、運営ポリシー、アカウント保守、開設者向けの操作をまとめています。</p></div><section class="panel system-panel"><details class="system-card"><summary>利用規約・大会参加ルール</summary><ul><li>チェックイン後の途中辞退、無断欠席、進行を妨げる行為は禁止です。</li><li>八百長、ウィントレード、談合、順位操作、外部連絡による不正な協力は禁止です。</li><li>運営からの案内、テーブル作成依頼、結果報告の指示には速やかに対応してください。</li></ul></details><details class="system-card"><summary>アカウント保守</summary><p>メールアドレス連携とパスワード変更はマイページのアカウント情報から編集できます。</p></details><details class="system-card owner-system-card"><summary>開設者オプション</summary><p>大会作成、削除、進行補助などの管理操作は開設者のみ使用します。</p><div id="ownerSystemMount"></div></details></section>`;document.querySelector("main")?.insertBefore(system,admin.closest(".screen")||null)}
-function openSystemScreen(){document.querySelectorAll(".screen").forEach((s)=>s.classList.toggle("active",s.id==="system"));document.querySelectorAll(".nav-button").forEach((b)=>b.classList.toggle("active",b.dataset.go==="system"));if(location.hash!=="#system")location.hash="system"}
-function installRecords(){renameArchiveNav();renderRecords();renderRewardDetail();lockRewardCosmetics()}
-function renameArchiveNav(){document.querySelectorAll('[data-go="past"]').forEach((b)=>{if(["過去大会","Past"].includes(b.textContent.trim()))b.textContent="記録"});const h=document.querySelector("#past .page-heading");if(!h)return;const e=h.querySelector(".eyebrow"),t=h.querySelector("h2"),p=h.querySelector("p:last-child");if(e)e.textContent="Records";if(t)t.textContent="記録";if(p)p.textContent="競技ランキング、獲得RiseP、終了した大会の最終順位を確認できます。"}
-function renderRecords(){const mount=document.querySelector("#pastTournamentsList");if(!mount)return;const data=readState(),me=currentProfileId(),past=(data.tournaments||[]).filter((x)=>x.tournament?.status==="finished");const archive=past.map((item)=>{const trn=item.tournament||{},rows=standings(item).slice(0,16);return`<article class="past-tournament-card"><div class="past-tournament-head"><div><span>${esc(formatDate(trn.startAt))}</span><strong>${esc(trn.name||"無題の大会")}</strong><small>${esc(formatLabel(trn.formatType))}</small></div><span class="archive-chip">最終順位</span></div><div class="past-final-standings">${rows.length?rows.map((r,i)=>`<div class="${r.player.id===me?"is-current":""}"><b>${i+1}</b><span>${esc(r.player.displayName||"Player")}</span><strong>${r.points}pt / +${riseP(i+1)} RiseP</strong></div>`).join(""):`<div class="empty-state">順位データはまだありません。</div>`}</div></article>`}).join("");mount.innerHTML=`<section class="records-dashboard"><div class="records-title"><div><p class="eyebrow">Competitive Records</p><h3>競技ランキング</h3></div><span>大会入賞RisePで集計</span></div><div class="records-leaderboards">${board("デイリー",leaderboard(data,"daily"),"今日の上位")}${board("マンスリー",leaderboard(data,"monthly"),"今月の上位")}${board("セット期間",leaderboard(data,"set"),"Set期間累計")}${board("総合",leaderboard(data,"all"),"全期間累計")}</div><div class="reward-policy-strip">${REWARDS.map((r)=>`<article><span>${esc(r.rank)}</span><strong>${r.points} RiseP</strong><small>${esc(r.item)}</small></article>`).join("")}</div></section>${past.length?`<div class="archive-section-head"><p class="eyebrow">Tournament Archive</p><h3>大会アーカイブ</h3></div>${archive}`:`<div class="empty-state">終了した大会はまだありません。大会が完了すると、ここに最終順位とRisePが残ります。</div>`}`}
-function renderRewardDetail(){const mount=document.querySelector("#publicFormatDetails");if(!mount)return;mount.querySelectorAll(".tournament-reward-detail").forEach((n)=>n.remove());mount.insertAdjacentHTML("beforeend",`<section class="tournament-reward-detail"><div class="reward-detail-head"><span>Prize Line</span><strong>入賞ライン・ランキング報酬</strong><p>大会終了後、最終順位に応じてTFTRise内ポイント「RiseP」を付与します。称号や特別フレームは今後実装予定の報酬アイテムです。</p></div><div class="reward-detail-grid">${REWARDS.map((r)=>`<article><span>${esc(r.rank)}</span><strong>${r.points} RiseP</strong><small>${esc(r.item)}</small></article>`).join("")}</div></section>`)}
-function board(title,rows,caption){const me=currentProfileId(),vis=rows.slice(0,5);return`<article class="records-board"><div class="records-board-head"><span>${esc(caption)}</span><strong>${esc(title)}</strong></div><div class="records-board-list">${vis.length?vis.map((r,i)=>`<div class="records-player-row ${r.playerId===me?"is-current":""}"><b>${i+1}</b><span>${esc(r.displayName)}</span><strong>${r.rewardPoints} RiseP</strong></div>`).join(""):`<div class="empty-state">まだランキング対象の成績はありません。</div>`}</div></article>`}
-function lockRewardCosmetics(){const form=document.querySelector("#rewardCosmeticsForm");if(!form)return;const select=form.querySelector('select[name="selectedTitle"]');if(select){select.innerHTML='<option value="">デフォルトのみ</option>';select.disabled=true}const note=form.querySelector(".security-note");if(note)note.textContent="称号、特別アイコン、フレームは今後実装予定です。現在設定できるのはデフォルトアイコンのみです。";const grid=form.querySelector(".reward-grid");if(grid)grid.innerHTML='<article class="reward-card active"><span>デフォルト</span><strong>黒アイコン</strong><small>全プレイヤー共通</small></article><article class="reward-card locked"><span>称号</span><strong>実装予定アイテム</strong><small>大会報酬として後日解放予定</small></article><article class="reward-card locked"><span>フレーム</span><strong>実装予定アイテム</strong><small>大会報酬として後日解放予定</small></article>';const button=form.querySelector('button[type="submit"]');if(button){button.textContent="現在は変更できません";button.disabled=true}}
-function leaderboard(data,period){const map=new Map();(data.tournaments||[]).filter((x)=>x.tournament?.status==="finished").filter((x)=>inPeriod(x,period)).forEach((item)=>standings(item).forEach((row,i)=>{const gain=riseP(i+1);if(!gain)return;const key=normalizeLoose(row.player.riotId||row.player.accountEmail||row.player.discordId||row.player.displayName||row.player.id),rec=map.get(key)||{playerId:row.player.id,displayName:row.player.displayName||"Player",rewardPoints:0,wins:0,podiums:0,top8s:0};rec.rewardPoints+=gain;rec.wins+=i===0?1:0;rec.podiums+=i<3?1:0;rec.top8s+=i<8?1:0;map.set(key,rec)}));return[...map.values()].sort((a,b)=>b.rewardPoints-a.rewardPoints||b.wins-a.wins||b.podiums-a.podiums||b.top8s-a.top8s||a.displayName.localeCompare(b.displayName,"ja"))}
-function standings(item){const players=item.players||[],results=item.results||{};return players.map((p)=>{const hist=[1,2,3,4,5,6].map((g)=>Number(results[g]?.[p.id]||0)),played=hist.filter(Boolean),points=played.reduce((s,pl)=>s+(pl?9-pl:0),0),firsts=played.filter((pl)=>pl===1).length,top4=played.filter((pl)=>pl>=1&&pl<=4).length,avg=played.length?played.reduce((s,pl)=>s+pl,0)/played.length:0,finalPlacement=hist.slice().reverse().find(Boolean)||99;return{player:p,history:hist,points,firsts,firstRate:played.length?firsts/played.length:0,top4Rate:played.length?top4/played.length:0,average:avg,finalPlacement}}).sort((a,b)=>b.points-a.points||b.firstRate-a.firstRate||b.firsts-a.firsts||b.top4Rate-a.top4Rate||a.average-b.average||a.finalPlacement-b.finalPlacement||String(a.player.displayName||"").localeCompare(String(b.player.displayName||""),"ja"))}
-function riseP(rank){if(rank===1)return 100;if(rank===2)return 70;if(rank===3)return 55;if(rank===4)return 45;if(rank<=8)return 25;if(rank<=16)return 10;return 0}
-function inPeriod(item,period){if(period==="all"||period==="set")return true;const d=item.tournament?.startAt?new Date(item.tournament.startAt):new Date();if(Number.isNaN(d.getTime()))return true;const n=new Date();if(period==="daily")return d.toDateString()===n.toDateString();if(period==="monthly")return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth();return true}
-function currentProfileId(){try{return JSON.parse(localStorage.getItem(PROFILE_KEY)||"null")?.id||""}catch{return""}}
-function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}")}catch{return{}}}
-function formatDate(v){if(!v)return"未設定";const d=new Date(v);return Number.isNaN(d.getTime())?"未設定":d.toLocaleString("ja-JP",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}
-function formatLabel(t){return{sixGame:"6戦総合pt式",oneDayElim:"1日完結型（鰹節杯ルール）",multiDay:"TPC式Day制",custom:"カスタム"}[t]||"6戦総合pt式"}
-function installAdminUserEditor(){const boot=()=>{const table=document.querySelector("#playersTable");if(!table||table.dataset.adminEditor==="1")return;table.dataset.adminEditor="1";new MutationObserver(()=>renderEditableRows(table)).observe(table,{childList:true,subtree:true});table.addEventListener("change",(e)=>{const input=e.target.closest(".admin-player-input");if(input)saveAdminPlayerField(input.dataset.id,input.dataset.field,input.value)});renderEditableRows(table)};document.readyState==="loading"?document.addEventListener("DOMContentLoaded",boot):boot();setTimeout(boot,1000)}
-function renderEditableRows(table){[...table.querySelectorAll("tr")].forEach((row)=>{if(row.dataset.adminEditable==="1")return;const id=row.querySelector("[data-id]")?.dataset.id;if(!id)return;const player=currentStoredPlayers().find((p)=>p.id===id);if(!player)return;let cells=row.querySelectorAll("td");if(cells.length<6)return;if(cells.length===6){cells[5].insertAdjacentElement("beforebegin",document.createElement("td"));cells=row.querySelectorAll("td")} ["displayName","riotId","discordId","xAccount","accountEmail"].forEach((field,i)=>{const type=field==="accountEmail"?"email":"text";cells[i+1].innerHTML=`<input class="admin-player-input" type="${type}" data-id="${escAttr(id)}" data-field="${field}" value="${escAttr(player[field]||"")}" />`});row.dataset.adminEditable="1"})}
-function currentStoredPlayers(){try{const data=readState(),active=data.tournaments?.find((t)=>t.id===data.activeTournamentId);return active?.players||data.players||[]}catch{return[]}}
-function saveAdminPlayerField(id,field,value){if(!["displayName","riotId","discordId","xAccount","accountEmail"].includes(field))return;try{const data=readState(),active=data.tournaments?.find((t)=>t.id===data.activeTournamentId),previous={...(active?.players||data.players||[]).find((p)=>p.id===id)};updatePlayerList(data.players,id,field,value);if(active)updatePlayerList(active.players,id,field,value);const json=JSON.stringify(data);originalSetItem(STORAGE_KEY,json);scheduleSave(json);syncAccountProfiles(previous,{...previous,[field]:String(value||"").trim()})}catch(e){console.warn("TFTRise admin user save failed:",e)}}
-function updatePlayerList(players,id,field,value){if(!Array.isArray(players))return;const p=players.find((x)=>x.id===id);if(p)p[field]=String(value||"").trim()}
-function syncAccountProfiles(previous,updated){try{const accounts=JSON.parse(localStorage.getItem(ACCOUNTS_KEY)||"{}");Object.keys(accounts).forEach((key)=>{if(profileMatches(accounts[key]?.profile,previous))accounts[key].profile={...(accounts[key].profile||{}),...updated}});originalSetItem(ACCOUNTS_KEY,JSON.stringify(accounts));const current=JSON.parse(localStorage.getItem(PROFILE_KEY)||"null");if(profileMatches(current,previous))originalSetItem(PROFILE_KEY,JSON.stringify({...current,...updated}))}catch{}}
-function profileMatches(profile,player){if(!profile||!player)return false;return["riotId","discordId","displayName","accountEmail"].some((key)=>normalizeLoose(profile[key])&&normalizeLoose(profile[key])===normalizeLoose(player[key]))}
-function normalizeLoose(value){return String(value||"").toLowerCase().normalize("NFKC").replace(/[#].*$/,"").replace(/[^a-z0-9@\._-]/g,"")}
-function esc(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
-function escAttr(v){return esc(v)}
+﻿(function () {
+  const STORAGE_KEY = "tft-space-gods-cup";
+  const REMOTE_STATE_ID = "tftrise-main";
+  const HYDRATED_KEY = "tftrise-remote-hydrated";
+  const ACCOUNTS_KEY = "tftrise-accounts";
+  const PROFILE_KEY = "tftrise-profile";
+  const REMOTE_ACCOUNTS_KEY = "__tftriseAccounts";
+  let remoteReady = false;
+  let saveTimer = null;
+  let lastSaved = "";
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+
+  installSystemEnhancements();
+
+  localStorage.setItem = function patchedSetItem(key, value) {
+    originalSetItem(key, value);
+    if (key === STORAGE_KEY || key === ACCOUNTS_KEY) scheduleSave();
+    if (key === STORAGE_KEY) setTimeout(installRecordsEnhancements, 0);
+  };
+
+  initRemoteSync().catch((error) => {
+    console.warn("TFTRise remote sync disabled:", error);
+  });
+
+  async function initRemoteSync() {
+    remoteReady = true;
+    await hydrateFromRemote();
+    scheduleSave();
+  }
+
+  async function hydrateFromRemote() {
+    const response = await fetch("/api/state", { cache: "no-store" });
+    if (!response.ok) throw new Error("Remote state read failed");
+    const result = await response.json();
+    if (!result?.data) return;
+    const remoteState = stripRemoteAccounts(result.data);
+    const remoteJson = JSON.stringify(readLocalBundleFromRemote(result.data));
+    const remoteStateJson = JSON.stringify(remoteState);
+    const remoteAccountsJson = JSON.stringify(result.data?.[REMOTE_ACCOUNTS_KEY] || {});
+    const localJson = JSON.stringify(readLocalBundle());
+    const localStateJson = localStorage.getItem(STORAGE_KEY) || "";
+    const localAccountsJson = localStorage.getItem(ACCOUNTS_KEY) || "{}";
+    lastSaved = remoteJson;
+    if (remoteJson && remoteJson !== localJson && sessionStorage.getItem(HYDRATED_KEY) !== remoteJson) {
+      sessionStorage.setItem(HYDRATED_KEY, remoteJson);
+      if (remoteStateJson !== localStateJson) originalSetItem(STORAGE_KEY, remoteStateJson);
+      if (remoteAccountsJson !== localAccountsJson) originalSetItem(ACCOUNTS_KEY, remoteAccountsJson);
+      location.reload();
+    }
+  }
+
+  function scheduleSave() {
+    if (!remoteReady) return;
+    const value = JSON.stringify(readLocalBundle());
+    if (!value || value === lastSaved) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveRemoteState().catch((error) => console.warn("TFTRise remote save failed:", error));
+    }, 700);
+  }
+
+  async function saveRemoteState() {
+    const value = JSON.stringify(readLocalBundle());
+    if (!remoteReady || !value || value === lastSaved) return;
+    const response = await fetch("/api/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: JSON.parse(value) }),
+    });
+    if (!response.ok) throw new Error("Remote state write failed");
+    lastSaved = value;
+  }
+
+  function readLocalBundle() {
+    const state = safeParse(localStorage.getItem(STORAGE_KEY) || "{}");
+    const accounts = safeParse(localStorage.getItem(ACCOUNTS_KEY) || "{}");
+    return readLocalBundleFromRemote({ ...state, [REMOTE_ACCOUNTS_KEY]: accounts });
+  }
+
+  function readLocalBundleFromRemote(data) {
+    return { ...stripRemoteAccounts(data || {}), [REMOTE_ACCOUNTS_KEY]: data?.[REMOTE_ACCOUNTS_KEY] || {} };
+  }
+
+  function stripRemoteAccounts(data) {
+    const state = { ...(data || {}) };
+    delete state[REMOTE_ACCOUNTS_KEY];
+    return state;
+  }
+
+  function safeParse(value) {
+    try {
+      return JSON.parse(value || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function installSystemEnhancements() {
+    const css = document.createElement("style");
+    css.textContent = `
+      #adminOpenBtn { display: none !important; }
+      .public-nav { align-items: center !important; }
+      .nav-button { min-width: 118px !important; min-height: 48px !important; }
+      .nav-button[data-go="home"] {
+        min-width: 154px !important;
+        min-height: 54px !important;
+        border-color: rgba(239, 197, 109, .76) !important;
+        color: #160d05 !important;
+        background: linear-gradient(180deg, #ffe28f, #e5a93e) !important;
+        box-shadow: 0 14px 30px rgba(239, 197, 109, .18) !important;
+        font-size: 1rem !important;
+      }
+      .nav-button[data-go="home"].active,
+      .nav-button[data-go="home"]:hover {
+        color: #160d05 !important;
+        background: linear-gradient(180deg, #fff0b4, #f0bd52) !important;
+      }
+      .owner-options-text { width: 100%; justify-content: center; }
+      .system-panel { display: grid; gap: 12px; max-width: 920px; }
+      .system-card { border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 12px; background: rgba(255,255,255,.035); }
+      .system-card:not([open]) { background: rgba(255,255,255,.025) !important; }
+      .system-card[open] { border-color: rgba(88,199,255,.22) !important; }
+      .system-card summary { cursor: pointer; color: #f7fbff; font-weight: 900; }
+      .system-card p, .system-card li { color: #aab7cb; line-height: 1.75; }
+      .system-card ul { margin: 10px 0 0; padding-left: 18px; }
+      .owner-system-card { max-width: 360px; }
+      .admin-player-input {
+        width: min(190px, 100%);
+        min-height: 34px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 6px;
+        padding: 7px 9px;
+        color: #f7fbff;
+        background: rgba(5,10,22,.72);
+        font: inherit;
+      }
+      .records-dashboard{display:grid;gap:14px}.records-title,.archive-section-head,.records-board-head,.reward-detail-head{display:flex;gap:12px;align-items:end;justify-content:space-between}.records-title h3,.archive-section-head h3{color:#f7fbff;font-size:clamp(1.35rem,3vw,2rem)}.records-title>span{border:1px solid rgba(239,197,109,.34);border-radius:999px;padding:7px 12px;color:#efc56d;background:rgba(239,197,109,.08);font-weight:900}.records-leaderboards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.records-board{display:grid;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:12px;background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(231,248,255,.9));box-shadow:0 18px 46px rgba(0,0,0,.18)}.records-board-head{align-items:start}.records-board-head span{color:#667085;font-size:.76rem;font-weight:800}.records-board-head strong{color:#172033;font-size:1.08rem}.records-board-list{display:grid;gap:7px}.records-player-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:38px;border:1px solid rgba(23,32,51,.08);border-radius:8px;padding:6px 8px;background:rgba(255,255,255,.7)}.records-player-row.is-current{border-color:rgba(239,197,109,.7);background:linear-gradient(90deg,#fff2bd,#e7f8ff)}.records-player-row b{display:grid;place-items:center;width:24px;height:24px;border-radius:999px;color:#101828;background:rgba(239,197,109,.42)}.records-player-row span{overflow:hidden;color:#172033;text-overflow:ellipsis;white-space:nowrap;font-weight:900}.records-player-row strong{color:#b71f3a}.reward-policy-strip,.reward-detail-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.reward-policy-strip article,.reward-detail-grid article{display:grid;gap:4px;border:1px solid rgba(239,197,109,.22);border-radius:8px;padding:10px;background:rgba(239,197,109,.08)}.reward-policy-strip span,.reward-detail-grid span,.reward-policy-strip small,.reward-detail-grid small{color:#b8b1c6;font-size:.76rem}.reward-policy-strip strong,.reward-detail-grid strong{color:#efc56d;font-size:1.1rem}.tournament-reward-detail{display:grid;gap:10px;border:1px solid rgba(239,197,109,.24);border-radius:8px;padding:12px;background:rgba(239,197,109,.055)}.reward-detail-head{align-items:start;flex-direction:column}.reward-detail-head span{color:#efc56d;font-size:.76rem;font-weight:900;text-transform:uppercase}.reward-detail-head strong{color:#fff4dc;font-size:1.1rem}.reward-detail-head p{color:#b8b1c6}
+      @media (max-width: 640px) {
+        .site-header {
+          grid-template-columns: minmax(0, 1fr) !important;
+          gap: 8px !important;
+        }
+        .brand {
+          grid-column: 1 !important;
+          order: 1 !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+        .mypage-top-button {
+          display: none !important;
+        }
+        .public-nav {
+          display: none !important;
+        }
+        .nav-button {
+          min-width: 0 !important;
+          width: 100% !important;
+          min-height: 38px !important;
+          padding: 7px 8px !important;
+        }
+        .nav-button[data-go="home"] {
+          min-width: 0 !important;
+          min-height: 46px !important;
+          font-size: .92rem !important;
+        }
+        .tournament-card, .hero { min-height: 0 !important; }
+        .hero {
+          gap: 14px !important;
+          padding: 18px 14px !important;
+          border-radius: 8px !important;
+          background-position: center top !important;
+        }
+        .hero h1 {
+          font-size: clamp(2rem, 10vw, 3rem) !important;
+          line-height: 1.02 !important;
+        }
+        .hero p { font-size: .9rem !important; }
+        .format-box {
+          grid-template-columns: 1fr !important;
+          gap: 6px !important;
+          padding: 10px !important;
+        }
+        .format-box strong { font-size: 1.08rem !important; }
+        .entry-cta-panel {
+          grid-template-columns: 1fr !important;
+          padding: 16px !important;
+          border-color: rgba(239,197,109,.42) !important;
+          background: linear-gradient(135deg, rgba(239,197,109,.13), rgba(88,199,255,.07)) !important;
+        }
+        .entry-cta-button {
+          width: 100% !important;
+          min-height: 48px !important;
+        }
+        .records-leaderboards,.reward-policy-strip,.reward-detail-grid{grid-template-columns:1fr!important}.records-title,.archive-section-head{align-items:start!important;flex-direction:column!important}.records-board{padding:10px!important}
+        .mypage-panel { gap: 10px !important; padding: 10px !important; }
+        .profile-primary { padding: 10px !important; }
+        .profile-primary h3, .my-lobby-output h3, .my-history-output h3, .my-past-results-output h3 { margin: 0 !important; font-size: 1rem !important; }
+        .profile-hero { align-items: center !important; gap: 10px !important; padding: 10px !important; }
+        .profile-avatar-wrap { width: 58px !important; height: 58px !important; border-radius: 12px !important; }
+        .profile-avatar { border-radius: 12px !important; }
+        .profile-hero strong { font-size: 1.14rem !important; }
+        .profile-hero em, .profile-hero p { font-size: .72rem !important; }
+        .profile-grid, .my-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 7px !important; }
+        .profile-grid article, .my-summary article, .past-result-card { padding: 9px !important; gap: 5px !important; }
+        .profile-grid span, .my-summary span, .past-result-card span { font-size: .7rem !important; }
+        .profile-grid strong, .my-summary strong, .past-result-card strong { font-size: .9rem !important; overflow-wrap: anywhere !important; }
+        .mypage-main-grid { display: flex !important; flex-direction: column !important; gap: 10px !important; }
+        .mypage-right-stack { order: 1 !important; gap: 10px !important; }
+        .mypage-left-stack { order: 2 !important; gap: 10px !important; }
+        .next-action-card, .entry-cancel-card, .my-lobby-tournament, .my-lobby-card { padding: 10px !important; }
+        .my-lobby-head { grid-template-columns: 1fr !important; }
+        .my-lobby-head strong { min-height: 36px !important; font-size: 1.2rem !important; }
+        .my-lobby-card li { padding: 8px !important; }
+      }
+    `;
+    document.head.appendChild(css);
+
+    const boot = () => {
+      const adminOpenBtn = document.querySelector("#adminOpenBtn");
+      if (adminOpenBtn) {
+        ensureSystemScreen(adminOpenBtn);
+        installAdminGate(adminOpenBtn);
+      }
+      installRecordsEnhancements();
+      setTimeout(installRecordsEnhancements, 600);
+    };
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+    else boot();
+  }
+
+  function installAdminGate(adminOpenBtn) {
+    if (document.querySelector("#ownerOptionsBtn")) return;
+    const ownerMount = document.querySelector("#ownerSystemMount");
+    if (!ownerMount) return;
+    const ownerOptionsBtn = document.createElement("button");
+    ownerOptionsBtn.id = "ownerOptionsBtn";
+    ownerOptionsBtn.className = "secondary-button owner-options-text";
+    ownerOptionsBtn.type = "button";
+    ownerOptionsBtn.setAttribute("aria-label", "\u958b\u8a2d\u8005\u30aa\u30d7\u30b7\u30e7\u30f3");
+    ownerOptionsBtn.title = "\u958b\u8a2d\u8005\u30aa\u30d7\u30b7\u30e7\u30f3";
+    ownerOptionsBtn.textContent = "\u7ba1\u7406\u753b\u9762\u3092\u958b\u304f";
+    adminOpenBtn.classList.add("hidden");
+    ownerMount.appendChild(ownerOptionsBtn);
+    ownerOptionsBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      adminOpenBtn.click();
+    });
+
+    const adminLoginBtn = document.querySelector("#adminLoginBtn");
+    const adminPin = document.querySelector("#adminPin");
+    if (adminPin) adminPin.placeholder = "\u7ba1\u7406PIN";
+    adminLoginBtn?.addEventListener(
+      "click",
+      (event) => {
+        event.stopImmediatePropagation();
+        window.unlockAdminConsole?.(adminPin?.value || "");
+      },
+      true
+    );
+  }
+
+  function ensureSystemScreen(adminOpenBtn) {
+    if (!document.querySelector("[data-go='system']")) {
+      const nav = document.querySelector(".public-nav");
+      const reportButton = document.querySelector("#reportNavBtn");
+      const systemButton = document.createElement("button");
+      systemButton.className = "nav-button";
+      systemButton.type = "button";
+      systemButton.dataset.go = "system";
+      systemButton.textContent = "\u30b7\u30b9\u30c6\u30e0";
+      systemButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        openSystemScreen();
+      });
+      nav?.insertBefore(systemButton, reportButton || null);
+    }
+
+    if (document.querySelector("#system")) {
+      if (!document.querySelector("#ownerSystemMount")) {
+        document.querySelector(".owner-system-card")?.insertAdjacentHTML("beforeend", '<div id="ownerSystemMount"></div>');
+      }
+      return;
+    }
+
+    const system = document.createElement("section");
+    system.id = "system";
+    system.className = "screen";
+    system.innerHTML = `
+      <div class="page-heading">
+        <p class="eyebrow">System</p>
+        <h2>\u30b7\u30b9\u30c6\u30e0</h2>
+        <p>\u5229\u7528\u898f\u7d04\u3001\u904b\u55b6\u30dd\u30ea\u30b7\u30fc\u3001\u30a2\u30ab\u30a6\u30f3\u30c8\u4fdd\u5b88\u3001\u958b\u8a2d\u8005\u5411\u3051\u306e\u64cd\u4f5c\u3092\u307e\u3068\u3081\u3066\u3044\u307e\u3059\u3002</p>
+      </div>
+      <section class="panel system-panel">
+        <details class="system-card">
+          <summary>\u5229\u7528\u898f\u7d04\u30fb\u5927\u4f1a\u53c2\u52a0\u30eb\u30fc\u30eb</summary>
+          <ul>
+            <li>\u30c1\u30a7\u30c3\u30af\u30a4\u30f3\u5f8c\u306e\u9014\u4e2d\u8f9e\u9000\u3001\u7121\u65ad\u6b20\u5e2d\u3001\u9032\u884c\u3092\u59a8\u3052\u308b\u884c\u70ba\u306f\u7981\u6b62\u3067\u3059\u3002</li>
+            <li>\u516b\u767e\u9577\u3001\u30a6\u30a3\u30f3\u30c8\u30ec\u30fc\u30c9\u3001\u8ac7\u5408\u3001\u9806\u4f4d\u64cd\u4f5c\u3001\u5916\u90e8\u9023\u7d61\u306b\u3088\u308b\u4e0d\u6b63\u306a\u5354\u529b\u306f\u7981\u6b62\u3067\u3059\u3002</li>
+            <li>\u904b\u55b6\u304b\u3089\u306e\u6848\u5185\u3001\u30c6\u30fc\u30d6\u30eb\u4f5c\u6210\u4f9d\u983c\u3001\u7d50\u679c\u5831\u544a\u306e\u6307\u793a\u306b\u306f\u901f\u3084\u304b\u306b\u5bfe\u5fdc\u3057\u3066\u304f\u3060\u3055\u3044\u3002</li>
+          </ul>
+        </details>
+        <details class="system-card">
+          <summary>\u30a2\u30ab\u30a6\u30f3\u30c8\u4fdd\u5b88</summary>
+          <p>\u30e1\u30fc\u30eb\u30a2\u30c9\u30ec\u30b9\u9023\u643a\u3068\u30d1\u30b9\u30ef\u30fc\u30c9\u5909\u66f4\u306f\u30de\u30a4\u30da\u30fc\u30b8\u306e\u30a2\u30ab\u30a6\u30f3\u30c8\u60c5\u5831\u304b\u3089\u7de8\u96c6\u3067\u304d\u307e\u3059\u3002</p>
+        </details>
+        <details class="system-card owner-system-card">
+          <summary>\u958b\u8a2d\u8005\u30aa\u30d7\u30b7\u30e7\u30f3</summary>
+          <p>\u5927\u4f1a\u4f5c\u6210\u3001\u524a\u9664\u3001\u9032\u884c\u88dc\u52a9\u306a\u3069\u306e\u7ba1\u7406\u64cd\u4f5c\u306f\u958b\u8a2d\u8005\u306e\u307f\u4f7f\u7528\u3057\u307e\u3059\u3002</p>
+          <div id="ownerSystemMount"></div>
+        </details>
+      </section>
+    `;
+    document.querySelector("main")?.insertBefore(system, adminOpenBtn.closest(".screen") || null);
+  }
+
+  function openSystemScreen() {
+    document.querySelectorAll(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === "system"));
+    document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.go === "system"));
+    if (location.hash !== "#system") location.hash = "system";
+  }
+
+  function installAdminUserEditor() {
+    const boot = () => {
+      const table = document.querySelector("#playersTable");
+      if (!table || table.dataset.adminEditor === "1") return;
+      table.dataset.adminEditor = "1";
+      const observer = new MutationObserver(() => renderEditableRows(table));
+      observer.observe(table, { childList: true, subtree: true });
+      table.addEventListener("change", (event) => {
+        const input = event.target.closest(".admin-player-input");
+        if (!input) return;
+        saveAdminPlayerField(input.dataset.id, input.dataset.field, input.value);
+      });
+      renderEditableRows(table);
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+    else boot();
+    setTimeout(boot, 1000);
+  }
+
+  function installRecordsEnhancements() {
+    renameArchiveNav();
+    renderRecordsScreen();
+    lockRewardCosmetics();
+  }
+
+  function renameArchiveNav() {
+    document.querySelectorAll('[data-go="past"]').forEach((item) => {
+      if (["\u904e\u53bb\u5927\u4f1a", "Past"].includes(item.textContent.trim())) item.textContent = "\u8a18\u9332";
+    });
+    const heading = document.querySelector("#past .page-heading");
+    if (!heading) return;
+    const eyebrow = heading.querySelector(".eyebrow");
+    const title = heading.querySelector("h2");
+    const body = heading.querySelector("p:last-child");
+    if (eyebrow) eyebrow.textContent = "Records";
+    if (title) title.textContent = "\u8a18\u9332";
+    if (body) body.textContent = "\u7af6\u6280\u30e9\u30f3\u30ad\u30f3\u30b0\u3001\u5927\u4f1a\u6210\u7e3e\u3001\u7d42\u4e86\u3057\u305f\u5927\u4f1a\u306e\u6700\u7d42\u9806\u4f4d\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059\u3002";
+  }
+
+  function renderRecordsScreen() {
+    const mount = document.querySelector("#pastTournamentsList");
+    if (!mount) return;
+    const data = readAppState();
+    const currentUserId = currentProfileId();
+    const past = (data.tournaments || []).filter((item) => item.tournament?.status === "finished");
+    const archive = past.map((item) => {
+      const tournament = item.tournament || {};
+      const standings = calculateTournamentStandings(item).slice(0, 16);
+      return `
+        <article class="past-tournament-card">
+          <div class="past-tournament-head">
+            <div>
+              <span>${escapeHtml(formatDate(tournament.startAt))}</span>
+              <strong>${escapeHtml(tournament.name || "\u7121\u984c\u306e\u5927\u4f1a")}</strong>
+              <small>${escapeHtml(formatLabel(tournament.formatType))}</small>
+            </div>
+            <span class="archive-chip">\u6700\u7d42\u9806\u4f4d</span>
+          </div>
+          <div class="past-final-standings">
+            ${standings.length ? standings.map((row, index) => `
+              <div class="${row.player.id === currentUserId ? "is-current" : ""}">
+                <b>${index + 1}</b>
+                <span>${escapeHtml(row.player.displayName || "Player")}</span>
+                <strong>${row.points}pt</strong>
+              </div>
+            `).join("") : `<div class="empty-state">\u9806\u4f4d\u30c7\u30fc\u30bf\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002</div>`}
+          </div>
+        </article>
+      `;
+    }).join("");
+    mount.innerHTML = `
+      <section class="records-dashboard">
+        <div class="records-title">
+          <div>
+            <p class="eyebrow">Competitive Records</p>
+            <h3>\u7af6\u6280\u30e9\u30f3\u30ad\u30f3\u30b0</h3>
+          </div>
+          <span>\u5927\u4f1a\u30ec\u30d9\u30eb\u5225\u306e\u96c6\u8a08\u306b\u5bfe\u5fdc\u4e88\u5b9a</span>
+        </div>
+        <div class="records-leaderboards">
+          ${leaderboardMarkup("\u30c7\u30a4\u30ea\u30fc", calculateCompetitiveLeaderboard(data, "daily"), "\u4eca\u65e5\u306e\u4e0a\u4f4d")}
+          ${leaderboardMarkup("\u30de\u30f3\u30b9\u30ea\u30fc", calculateCompetitiveLeaderboard(data, "monthly"), "\u4eca\u6708\u306e\u4e0a\u4f4d")}
+          ${leaderboardMarkup("\u30bb\u30c3\u30c8\u671f\u9593", calculateCompetitiveLeaderboard(data, "set"), "Set\u671f\u9593\u7d2f\u8a08")}
+          ${leaderboardMarkup("\u7dcf\u5408", calculateCompetitiveLeaderboard(data, "all"), "\u5168\u671f\u9593\u7d2f\u8a08")}
+        </div>
+      </section>
+      ${past.length ? `<div class="archive-section-head"><p class="eyebrow">Tournament Archive</p><h3>\u5927\u4f1a\u30a2\u30fc\u30ab\u30a4\u30d6</h3></div>${archive}` : `<div class="empty-state">\u7d42\u4e86\u3057\u305f\u5927\u4f1a\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002\u5927\u4f1a\u304c\u5b8c\u4e86\u3059\u308b\u3068\u3001\u3053\u3053\u306b\u6700\u7d42\u9806\u4f4d\u304c\u6b8b\u308a\u307e\u3059\u3002</div>`}
+    `;
+  }
+
+  function leaderboardMarkup(title, rows, caption) {
+    const currentUserId = currentProfileId();
+    const visibleRows = rows.slice(0, 5);
+    return `
+      <article class="records-board">
+        <div class="records-board-head"><span>${escapeHtml(caption)}</span><strong>${escapeHtml(title)}</strong></div>
+        <div class="records-board-list">
+          ${visibleRows.length ? visibleRows.map((row, index) => `
+            <div class="records-player-row ${row.playerId === currentUserId ? "is-current" : ""}">
+              <b>${index + 1}</b>
+              <span>${escapeHtml(row.displayName)}</span>
+              <strong>${row.rewardPoints}pt</strong>
+            </div>
+          `).join("") : `<div class="empty-state">\u307e\u3060\u30e9\u30f3\u30ad\u30f3\u30b0\u5bfe\u8c61\u306e\u6210\u7e3e\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>`}
+        </div>
+      </article>
+    `;
+  }
+
+  function lockRewardCosmetics() {
+    const form = document.querySelector("#rewardCosmeticsForm");
+    if (!form || form.dataset.riseLocked === "1") return;
+    form.dataset.riseLocked = "1";
+    const select = form.querySelector('select[name="selectedTitle"]');
+    if (select) {
+      select.innerHTML = `<option value="">\u30c7\u30d5\u30a9\u30eb\u30c8\u306e\u307f</option>`;
+      select.disabled = true;
+    }
+    const note = form.querySelector(".security-note");
+    if (note) note.textContent = "\u79f0\u53f7\u3001\u7279\u5225\u30a2\u30a4\u30b3\u30f3\u3001\u30d5\u30ec\u30fc\u30e0\u306f\u4eca\u5f8c\u5b9f\u88c5\u4e88\u5b9a\u3067\u3059\u3002\u73fe\u5728\u8a2d\u5b9a\u3067\u304d\u308b\u306e\u306f\u30c7\u30d5\u30a9\u30eb\u30c8\u30a2\u30a4\u30b3\u30f3\u306e\u307f\u3067\u3059\u3002";
+    const grid = form.querySelector(".reward-grid");
+    if (grid) {
+      grid.innerHTML = `
+        <article class="reward-card active"><span>\u30c7\u30d5\u30a9\u30eb\u30c8</span><strong>\u9ed2\u30a2\u30a4\u30b3\u30f3</strong><small>\u5168\u30d7\u30ec\u30a4\u30e4\u30fc\u5171\u901a</small></article>
+        <article class="reward-card locked"><span>\u79f0\u53f7</span><strong>\u5b9f\u88c5\u4e88\u5b9a\u30a2\u30a4\u30c6\u30e0</strong><small>\u5927\u4f1a\u5831\u916c\u3068\u3057\u3066\u5f8c\u65e5\u89e3\u653e\u4e88\u5b9a</small></article>
+        <article class="reward-card locked"><span>\u30d5\u30ec\u30fc\u30e0</span><strong>\u5b9f\u88c5\u4e88\u5b9a\u30a2\u30a4\u30c6\u30e0</strong><small>\u5927\u4f1a\u5831\u916c\u3068\u3057\u3066\u5f8c\u65e5\u89e3\u653e\u4e88\u5b9a</small></article>
+      `;
+    }
+    const button = form.querySelector('button[type="submit"]');
+    if (button) {
+      button.textContent = "\u73fe\u5728\u306f\u5909\u66f4\u3067\u304d\u307e\u305b\u3093";
+      button.disabled = true;
+    }
+  }
+
+  function calculateCompetitiveLeaderboard(data, period) {
+    const ledger = new Map();
+    (data.tournaments || [])
+      .filter((item) => item.tournament?.status === "finished")
+      .filter((item) => tournamentInPeriod(item, period))
+      .forEach((item) => {
+        calculateTournamentStandings(item).forEach((row, index) => {
+          const rank = index + 1;
+          const rewardPoints = row.points;
+          if (!rewardPoints) return;
+          const key = normalizeLoose(row.player.riotId || row.player.accountEmail || row.player.discordId || row.player.displayName || row.player.id);
+          const record = ledger.get(key) || { playerId: row.player.id, displayName: row.player.displayName || "Player", rewardPoints: 0, wins: 0, podiums: 0, top8s: 0 };
+          record.rewardPoints += rewardPoints;
+          record.wins += rank === 1 ? 1 : 0;
+          record.podiums += rank <= 3 ? 1 : 0;
+          record.top8s += rank <= 8 ? 1 : 0;
+          ledger.set(key, record);
+        });
+      });
+    return [...ledger.values()].sort((a, b) => b.rewardPoints - a.rewardPoints || b.wins - a.wins || b.podiums - a.podiums || b.top8s - a.top8s || a.displayName.localeCompare(b.displayName, "ja"));
+  }
+
+  function calculateTournamentStandings(tournamentState) {
+    const players = tournamentState.players || [];
+    const results = tournamentState.results || {};
+    return players.map((player) => {
+      const history = [1, 2, 3, 4, 5, 6].map((gameNo) => Number(results[gameNo]?.[player.id] || 0));
+      const played = history.filter(Boolean);
+      const points = played.reduce((sum, placement) => sum + (placement ? 9 - Number(placement) : 0), 0);
+      const firsts = played.filter((placement) => placement === 1).length;
+      const top4 = played.filter((placement) => placement >= 1 && placement <= 4).length;
+      const firstRate = played.length ? firsts / played.length : 0;
+      const top4Rate = played.length ? top4 / played.length : 0;
+      const average = played.length ? played.reduce((sum, placement) => sum + placement, 0) / played.length : 0;
+      const finalPlacement = history.slice().reverse().find(Boolean) || 99;
+      return { player, history, points, firsts, firstRate, top4Rate, average, finalPlacement };
+    }).sort((a, b) => b.points - a.points || b.firstRate - a.firstRate || b.firsts - a.firsts || b.top4Rate - a.top4Rate || a.average - b.average || a.finalPlacement - b.finalPlacement || String(a.player.displayName || "").localeCompare(String(b.player.displayName || ""), "ja"));
+  }
+
+  function tournamentInPeriod(item, period) {
+    if (period === "all" || period === "set") return true;
+    const date = item.tournament?.startAt ? new Date(item.tournament.startAt) : new Date();
+    if (Number.isNaN(date.getTime())) return true;
+    const now = new Date();
+    if (period === "daily") return date.toDateString() === now.toDateString();
+    if (period === "monthly") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    return true;
+  }
+
+  function currentProfileId() {
+    try {
+      return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null")?.id || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function readAppState() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function formatDate(value) {
+    if (!value) return "\u672a\u8a2d\u5b9a";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "\u672a\u8a2d\u5b9a";
+    return date.toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatLabel(type) {
+    return { sixGame: "6\u6226\u7dcf\u5408pt\u5f0f", oneDayElim: "1\u65e5\u5b8c\u7d50\u578b\uff08\u9c39\u7bc0\u676f\u30eb\u30fc\u30eb\uff09", multiDay: "TPC\u5f0fDay\u5236", custom: "\u30ab\u30b9\u30bf\u30e0" }[type] || "6\u6226\u7dcf\u5408pt\u5f0f";
+  }
+  function renderEditableRows(table) {
+    [...table.querySelectorAll("tr")].forEach((row) => {
+      if (row.dataset.adminEditable === "1") return;
+      const id = row.querySelector("[data-id]")?.dataset.id;
+      if (!id) return;
+      const player = currentStoredPlayers().find((item) => item.id === id);
+      if (!player) return;
+      let cells = row.querySelectorAll("td");
+      if (cells.length < 6) return;
+      if (cells.length === 6) {
+        cells[5].insertAdjacentElement("beforebegin", document.createElement("td"));
+        cells = row.querySelectorAll("td");
+      }
+      ["displayName", "riotId", "discordId", "xAccount", "accountEmail"].forEach((field, index) => {
+        const cell = cells[index + 1];
+        const type = field === "accountEmail" ? "email" : "text";
+        cell.innerHTML = `<input class="admin-player-input" type="${type}" data-id="${escapeAttr(id)}" data-field="${field}" value="${escapeAttr(player[field] || "")}" />`;
+      });
+      row.dataset.adminEditable = "1";
+    });
+  }
+
+  function currentStoredPlayers() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      const active = data.tournaments?.find((item) => item.id === data.activeTournamentId);
+      return active?.players || data.players || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveAdminPlayerField(playerId, field, value) {
+    const allowed = new Set(["displayName", "riotId", "discordId", "xAccount", "accountEmail"]);
+    if (!allowed.has(field)) return;
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      const active = data.tournaments?.find((item) => item.id === data.activeTournamentId);
+      const previous = { ...(active?.players || data.players || []).find((item) => item.id === playerId) };
+      updatePlayerList(data.players, playerId, field, value);
+      if (active) updatePlayerList(active.players, playerId, field, value);
+      originalSetItem(STORAGE_KEY, JSON.stringify(data));
+      scheduleSave();
+      syncAccountProfiles(previous, { ...previous, [field]: String(value || "").trim() });
+    } catch (error) {
+      console.warn("TFTRise admin user save failed:", error);
+    }
+  }
+
+  function updatePlayerList(players, playerId, field, value) {
+    if (!Array.isArray(players)) return;
+    const player = players.find((item) => item.id === playerId);
+    if (player) player[field] = String(value || "").trim();
+  }
+
+  function syncAccountProfiles(previous, updated) {
+    try {
+      const accounts = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "{}");
+      Object.keys(accounts).forEach((key) => {
+        if (!profileMatches(accounts[key]?.profile, previous)) return;
+        accounts[key].profile = { ...(accounts[key].profile || {}), ...updated };
+      });
+      originalSetItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+      const current = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+      if (profileMatches(current, previous)) originalSetItem(PROFILE_KEY, JSON.stringify({ ...current, ...updated }));
+    } catch {}
+  }
+
+  function profileMatches(profile, player) {
+    if (!profile || !player) return false;
+    return ["riotId", "discordId", "displayName", "accountEmail"].some((key) => normalizeLoose(profile[key]) && normalizeLoose(profile[key]) === normalizeLoose(player[key]));
+  }
+
+  function normalizeLoose(value) {
+    return String(value || "").toLowerCase().normalize("NFKC").replace(/[#].*$/, "").replace(/[^a-z0-9@\._-]/g, "");
+  }
+
+  function escapeAttr(value) {
+    return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  }
 })();
+

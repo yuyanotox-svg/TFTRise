@@ -5,8 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TFTRise</title>
     <link rel="preconnect" href="https://cmsassets.rgpub.io" />
-    <link rel="stylesheet" href="./styles.css?v=91" />
+    <link rel="stylesheet" href="./styles.css?v=133" />
     <style>
+      .owner-menu {
+        position: relative;
+        justify-self: end;
+        display: grid;
+        gap: 6px;
+        justify-items: end;
+      }
+
+      .owner-options {
+        min-height: 34px;
+        border: 1px solid rgba(239, 197, 109, 0.28);
+        border-radius: 6px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 6px 10px;
+        font-weight: 850;
+        font-size: 0.78rem;
+      }
+
+      .owner-options:hover {
+        border-color: rgba(239, 197, 109, 0.64);
+        color: var(--text);
+        background: rgba(239, 197, 109, 0.1);
+      }
+
+      .admin-open {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        white-space: nowrap;
+        background: rgba(9, 15, 32, 0.96);
+        box-shadow: var(--shadow);
+      }
+
       @media (max-width: 640px) {
         html,
         body {
@@ -20,7 +54,7 @@
           height: auto !important;
           min-height: calc(100vh - 72px) !important;
           overflow: visible !important;
-          padding: 14px 12px 36px !important;
+          padding: 14px 12px calc(92px + env(safe-area-inset-bottom)) !important;
           overscroll-behavior-y: auto !important;
         }
 
@@ -28,9 +62,9 @@
           position: sticky !important;
           top: 0 !important;
           z-index: 30 !important;
-          grid-template-columns: 1fr auto auto !important;
+          grid-template-columns: 1fr !important;
           gap: 8px !important;
-          padding: 8px 10px !important;
+          padding: 8px 12px !important;
         }
 
         .brand {
@@ -53,11 +87,11 @@
         }
 
         .public-nav {
-          gap: 6px !important;
-          justify-self: end !important;
+          display: none !important;
         }
 
         .nav-button,
+        .owner-options,
         .admin-open,
         .mypage-top-button {
           min-height: 36px !important;
@@ -65,8 +99,23 @@
           font-size: 0.8rem !important;
         }
 
+        .owner-menu {
+          position: relative !important;
+          justify-self: end !important;
+          display: grid !important;
+          gap: 6px !important;
+          justify-items: end !important;
+        }
+
+        .admin-open {
+          position: absolute !important;
+          top: calc(100% + 8px) !important;
+          right: 0 !important;
+          white-space: nowrap !important;
+        }
+
         .mypage-top-button {
-          box-shadow: none !important;
+          display: none !important;
         }
 
         .tournament-carousel {
@@ -153,16 +202,25 @@
       </a>
       <nav class="public-nav" aria-label="参加者メニュー">
         <button class="nav-button active" type="button" data-go="home">大会</button>
-        <button class="nav-button" type="button" data-go="past">過去大会</button>
+        <button class="nav-button" type="button" data-go="past">記録</button>
+        <button class="nav-button" type="button" data-go="system">システム</button>
         <button id="reportNavBtn" class="nav-button hidden" type="button" data-go="report">結果報告</button>
       </nav>
       <button id="myPageTopBtn" class="mypage-top-button" type="button" data-go="mypage">マイページ</button>
-      <button id="adminOpenBtn" class="admin-open" type="button">管理</button>
+      <button id="adminOpenBtn" class="admin-open hidden" type="button">管理画面</button>
     </header>
     <div id="entryCompleteToast" class="entry-complete-toast hidden">
       <strong>エントリー完了</strong>
       <span>右上のマイページから、チェックインや自分のテーブルを確認できます。</span>
     </div>
+
+    <nav class="mobile-bottom-nav" aria-label="スマホ用メニュー">
+      <button class="nav-button mobile-nav-button active" type="button" data-go="home"><span>大会</span></button>
+      <button class="nav-button mobile-nav-button" type="button" data-go="past"><span>記録</span></button>
+      <button class="nav-button mobile-nav-button" type="button" data-go="report"><span>報告</span></button>
+      <button class="nav-button mobile-nav-button" type="button" data-go="mypage"><span>マイ</span></button>
+      <button class="nav-button mobile-nav-button" type="button" data-go="system"><span>設定</span></button>
+    </nav>
 
     <main>
       <section id="opening" class="screen opening-screen active">
@@ -185,12 +243,19 @@
             <button id="loginModeBtn" class="auth-mode active" type="button" data-auth-mode="login">ログイン</button>
             <button id="registerModeBtn" class="auth-mode" type="button" data-auth-mode="register">新規登録</button>
           </div>
-          <form id="authForm" class="auth-form">
+          <form id="authForm" class="auth-form" novalidate>
             <label>ユーザー名またはメールアドレス<input id="authLoginId" required maxlength="80" placeholder="username / mail@example.com" /></label>
             <label>パスワード<input id="authPassword" required type="password" maxlength="80" placeholder="password" /></label>
             <div id="authProfileFields" class="auth-profile-fields hidden">
               <label>表示名<input id="authDisplayName" maxlength="32" placeholder="例: tactician01" /></label>
-              <label>Riot ID<input id="authRiotId" maxlength="48" placeholder="例: Name#JP1" /></label>
+              <div class="form-field riot-id-field">
+                <span>Riot ID</span>
+                <div class="riot-id-split">
+                  <input id="authRiotName" maxlength="32" placeholder="サモナーネーム" autocomplete="off" />
+                  <b>#</b>
+                  <input id="authRiotTag" maxlength="12" placeholder="JP1" autocomplete="off" />
+                </div>
+              </div>
               <label>Discord ID<input id="authDiscordId" maxlength="48" placeholder="例: @user" /></label>
               <label>X（任意）<input id="authXAccount" maxlength="32" placeholder="例: @account" /></label>
             </div>
@@ -227,6 +292,7 @@
             <p class="eyebrow">Entry</p>
             <h2 id="entryCtaTitle">この大会にエントリー</h2>
             <p id="entryCtaText">ログイン後、1タップで大会へ参加できます。</p>
+            <div id="entryCtaSteps" class="entry-cta-steps"></div>
           </div>
           <div class="entry-cta-actions">
             <button id="homeEntryBtn" class="primary-button entry-cta-button" type="button">エントリーする</button>
@@ -271,9 +337,9 @@
 
       <section id="past" class="screen">
         <div class="page-heading">
-          <p class="eyebrow">Archive</p>
-          <h2>過去大会</h2>
-          <p>終了した大会の最終順位と結果を確認できます。</p>
+          <p class="eyebrow">Records</p>
+          <h2>記録</h2>
+          <p>競技ランキング、大会成績、終了した大会の最終順位を確認できます。</p>
         </div>
         <section class="panel past-tournaments-panel">
           <div id="pastTournamentsList" class="past-tournaments-list"></div>
@@ -346,13 +412,145 @@
         </section>
       </section>
 
+      <section id="system" class="screen">
+        <div class="page-heading">
+          <p class="eyebrow">System</p>
+          <h2>システム</h2>
+          <p>利用規約、運営ポリシー、アカウント保守、開設者向けの操作をまとめています。</p>
+        </div>
+        <section class="panel system-panel">
+          <details class="system-card guide-system-card">
+            <summary>参加者向けガイド</summary>
+            <div class="system-guide-grid">
+              <article>
+                <span>1</span>
+                <strong>ログイン</strong>
+                <p>表示名、Riot ID、Discord IDを登録します。Riot IDはサモナーネームとタグを分けて入力してください。</p>
+              </article>
+              <article>
+                <span>2</span>
+                <strong>エントリー</strong>
+                <p>大会カードからエントリーします。大会タイムラインと注意事項を確認して参加確定します。</p>
+              </article>
+              <article>
+                <span>3</span>
+                <strong>チェックイン</strong>
+                <p>大会開始前の30分間だけ受付されます。チェックインした人だけが正式参加者として反映されます。</p>
+              </article>
+              <article>
+                <span>4</span>
+                <strong>テーブル確認</strong>
+                <p>マイページで自分のテーブル、招待用Riot ID、テーブル開設者を確認します。</p>
+              </article>
+            </div>
+          </details>
+          <details class="system-card guide-system-card">
+            <summary>結果報告の流れ</summary>
+            <div class="system-guide-grid compact">
+              <article>
+                <span>1</span>
+                <strong>1位の人が報告</strong>
+                <p>対象ゲームとロビーはアカウント情報から自動で参照されます。</p>
+              </article>
+              <article>
+                <span>2</span>
+                <strong>スクリーンショット提出</strong>
+                <p>リザルト画像を提出すると着順認識を試します。難しい場合のみ手動入力します。</p>
+              </article>
+              <article>
+                <span>3</span>
+                <strong>管理側で確認</strong>
+                <p>誰が、どのゲーム、どのロビーを提出したか管理画面に残ります。</p>
+              </article>
+            </div>
+          </details>
+          <details class="system-card guide-system-card">
+            <summary>運営向け進行手順</summary>
+            <div class="system-guide-grid compact">
+              <article>
+                <span>1</span>
+                <strong>大会作成</strong>
+                <p>大会名、開始日時、形式、定員、ロビー抽選ルールを保存します。</p>
+              </article>
+              <article>
+                <span>2</span>
+                <strong>チェックイン確認</strong>
+                <p>開始前に正式参加者と補欠、Riot ID、Discord IDを確認します。</p>
+              </article>
+              <article>
+                <span>3</span>
+                <strong>大会開始</strong>
+                <p>開始ボタン後は必要なロビーだけ順番に生成します。先行生成は避けます。</p>
+              </article>
+              <article>
+                <span>4</span>
+                <strong>終了と記録</strong>
+                <p>全試合の結果確認後に大会終了し、記録ページへ最終順位を残します。</p>
+              </article>
+            </div>
+          </details>
+          <details class="system-card">
+            <summary>利用規約・大会参加ルール</summary>
+            <ul>
+              <li>チェックイン後の途中辞退、無断欠席、進行を妨げる行為は禁止です。</li>
+              <li>八百長、ウィントレード、談合、順位操作、外部連絡による不正な協力は禁止です。</li>
+              <li>運営からの案内、テーブル作成依頼、結果報告の指示には速やかに対応してください。</li>
+            </ul>
+          </details>
+          <details class="system-card rule-system-card">
+            <summary>競技規約・ペナルティ</summary>
+            <div class="rule-grid">
+              <article>
+                <strong>途中辞退・無断欠席</strong>
+                <p>チェックイン後の辞退、無断欠席、連絡なしの離脱は禁止です。やむを得ない場合は必ず運営へ連絡してください。</p>
+                <span>警告 / 出場制限 / アカウント停止</span>
+              </article>
+              <article>
+                <strong>ウィントレード・談合</strong>
+                <p>順位操作、意図的な利敵、外部通話やDMによる不正な協力、報酬目的の勝敗調整は禁止です。</p>
+                <span>失格 / RiseP無効 / アカウント停止</span>
+              </article>
+              <article>
+                <strong>虚偽報告・改ざん</strong>
+                <p>結果画像の改ざん、意図的な誤入力、別ロビーの結果提出、提出者のなりすましは禁止です。</p>
+                <span>結果無効 / 失格 / アカウント停止</span>
+              </article>
+              <article>
+                <strong>進行妨害</strong>
+                <p>テーブル作成依頼の放置、招待妨害、過度な遅延、運営指示への不対応は大会進行の妨げとして扱います。</p>
+                <span>警告 / 代替対応 / 出場制限</span>
+              </article>
+            </div>
+            <p class="rule-note">最終判断は提出履歴、スクリーンショット、参加者からの報告をもとに運営が行います。</p>
+          </details>
+          <details class="system-card">
+            <summary>トラブル時</summary>
+            <ul>
+              <li>自分のテーブルが見えない場合は、ログイン中のRiot IDとエントリー時のRiot IDが一致しているか確認してください。</li>
+              <li>コピーが動かない場合は、ブラウザの権限またはHTTPS環境かを確認してください。本番公開URLでは通常動作します。</li>
+              <li>誤ったアカウント情報で登録した場合は、マイページから編集できます。運営側もパスワード以外を補正できます。</li>
+            </ul>
+            <div id="supportContactOutput" class="support-contact-output"></div>
+          </details>
+          <details class="system-card">
+            <summary>アカウント保守</summary>
+            <p>メールアドレス連携とパスワード変更はマイページのアカウント情報から編集できます。</p>
+          </details>
+          <details class="system-card owner-system-card">
+            <summary>開設者オプション</summary>
+            <p>大会作成、削除、進行補助などの管理操作は開設者のみ使用します。</p>
+            <button id="ownerOptionsBtn" class="secondary-button owner-options-text" type="button">管理画面を開く</button>
+          </details>
+        </section>
+      </section>
+
       <section id="admin" class="screen">
         <div id="adminLock" class="panel admin-lock">
           <p class="eyebrow">Admin</p>
           <h2>管理者操作</h2>
           <p>ロビー生成、手動修正、JSON操作、初期化は管理側だけに表示します。</p>
           <div class="admin-login">
-            <input id="adminPin" type="password" placeholder="管理PIN（初期値: admin）" />
+            <input id="adminPin" type="password" placeholder="管理PIN" />
             <button id="adminLoginBtn" class="primary-button" type="button">解除</button>
           </div>
         </div>
@@ -375,6 +573,43 @@
           </div>
 
           <div class="admin-grid">
+            <section class="panel wide admin-ops-panel">
+              <div class="admin-ops-head">
+                <div>
+                  <p class="eyebrow">Operation Flow</p>
+                  <h3>次にやること</h3>
+                </div>
+                <span class="admin-ops-status">半自動進行</span>
+              </div>
+              <div id="adminNextAction" class="admin-next-action"></div>
+              <div id="adminOpsChecklist" class="admin-ops-checklist"></div>
+              <div id="startReadinessOutput" class="start-readiness-output"></div>
+            </section>
+
+            <section class="panel wide release-health-panel">
+              <div class="release-health-head">
+                <div>
+                  <p class="eyebrow">Release Check</p>
+                  <h3>本番設定チェック</h3>
+                </div>
+                <button id="runHealthCheckBtn" class="secondary-button" type="button">設定を確認</button>
+              </div>
+              <p class="release-health-note">Vercel環境変数、Supabase接続、バックアップテーブルの準備状況を確認します。</p>
+              <div id="healthCheckOutput" class="health-check-output"></div>
+            </section>
+
+            <section class="panel wide data-audit-panel">
+              <div class="release-health-head">
+                <div>
+                  <p class="eyebrow">Data Audit</p>
+                  <h3>大会データ整合性チェック</h3>
+                </div>
+                <button id="runDataAuditBtn" class="secondary-button" type="button">データを確認</button>
+              </div>
+              <p class="release-health-note">参加者、チェックイン、ロビー、結果、アカウント情報の運用上の問題を検出します。</p>
+              <div id="dataAuditOutput" class="health-check-output"></div>
+            </section>
+
             <section class="panel wide">
               <h3>大会一覧</h3>
               <div class="tournament-list-actions">
@@ -383,6 +618,18 @@
                 <button id="deleteAllTournamentsBtn" class="danger-button" type="button">大会を全部削除</button>
               </div>
               <div id="tournamentList" class="tournament-list"></div>
+            </section>
+
+            <section class="panel wide backup-panel">
+              <div class="backup-panel-head">
+                <div>
+                  <p class="eyebrow">Recovery</p>
+                  <h3>共有データの復旧</h3>
+                </div>
+                <button id="loadBackupsBtn" class="secondary-button" type="button">バックアップを確認</button>
+              </div>
+              <p class="backup-note">サーバー保存前の履歴から復旧できます。復旧前の現在データも自動でバックアップされます。</p>
+              <div id="backupsOutput" class="backups-output"></div>
             </section>
 
             <section class="panel wide">
@@ -416,6 +663,8 @@
                     <option value="everyGame">毎試合抽選</option>
                   </select>
                 </label>
+                <label>連絡先名<input id="tournamentContactLabel" maxlength="32" placeholder="例: 運営Discord" /></label>
+                <label>連絡先URL<input id="tournamentContactUrl" type="url" maxlength="200" placeholder="https://discord.gg/..." /></label>
                 <button class="primary-button" type="submit">大会情報を保存</button>
               </form>
               <div class="format-editor">
@@ -436,7 +685,7 @@
               <h3>参加者</h3>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>区分</th><th>表示名</th><th>Riot ID</th><th>Discord</th><th>X</th><th></th></tr></thead>
+                  <thead><tr><th>区分</th><th>チェックイン</th><th>表示名</th><th>Riot ID</th><th>Discord</th><th>X</th><th>メール</th><th></th></tr></thead>
                   <tbody id="playersTable"></tbody>
                 </table>
               </div>
@@ -515,6 +764,10 @@
         <input id="entryTimelineConfirm" type="checkbox" />
         大会タイムラインを確認しました
       </label>
+      <label class="notice-confirm">
+        <input id="entryRuleConfirm" type="checkbox" />
+        途中辞退・ウィントレード・虚偽報告などの禁止事項に同意します
+      </label>
       <div class="dialog-actions">
         <button id="entryNoticeAgreeBtn" class="primary-button" type="button">同意してエントリー</button>
       </div>
@@ -563,6 +816,28 @@
       <p class="dialog-lead">大会開始前のチェックイン時間です。参加する場合はチェックインしてください。</p>
       <div class="dialog-actions">
         <button id="checkInDialogBtn" class="primary-button" type="button">チェックインする</button>
+      </div>
+    </dialog>
+
+    <dialog id="deleteConfirmDialog" class="tournament-dialog delete-confirm-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Danger Zone</p>
+          <h2 id="deleteConfirmTitle">削除確認</h2>
+        </div>
+        <button id="deleteConfirmCancelBtn" class="secondary-button" type="button">戻る</button>
+      </div>
+      <p id="deleteConfirmText" class="dialog-lead">削除する内容を確認してください。</p>
+      <div class="delete-confirm-box">
+        <strong id="deleteConfirmTarget">対象未選択</strong>
+        <p>削除前にバックアップJSONを自動保存します。この操作は取り消せません。</p>
+      </div>
+      <label class="delete-confirm-input">
+        確認テキスト
+        <input id="deleteConfirmInput" autocomplete="off" />
+      </label>
+      <div class="dialog-actions">
+        <button id="deleteConfirmExecuteBtn" class="danger-button" type="button" disabled>削除する</button>
       </div>
     </dialog>
 
@@ -616,7 +891,7 @@
         addEventListener("DOMContentLoaded", () => setTimeout(restore, 250));
       })();
     </script>
-    <script src="./remote-sync.js?v=91"></script>
-    <script src="./app.js?v=91"></script>
+    <script src="./remote-sync.js?v=133"></script>
+    <script src="./app.js?v=133"></script>
   </body>
 </html>
