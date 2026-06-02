@@ -33,18 +33,21 @@
     if (!response.ok) throw new Error("Remote state read failed");
     const result = await response.json();
     if (!result?.data) return;
-    const remoteState = stripRemoteAccounts(result.data);
-    const remoteJson = JSON.stringify(readLocalBundleFromRemote(result.data));
-    const remoteStateJson = JSON.stringify(remoteState);
-    const remoteAccountsJson = JSON.stringify(result.data?.[REMOTE_ACCOUNTS_KEY] || {});
-    const localJson = JSON.stringify(readLocalBundle());
+    const remoteBundle = readLocalBundleFromRemote(result.data);
+    const localBundle = readLocalBundle();
+    const mergedBundle = mergeBundles(remoteBundle, localBundle);
+    const remoteJson = JSON.stringify(remoteBundle);
+    const mergedJson = JSON.stringify(mergedBundle);
+    const mergedStateJson = JSON.stringify(stripRemoteAccounts(mergedBundle));
+    const mergedAccountsJson = JSON.stringify(mergedBundle[REMOTE_ACCOUNTS_KEY] || {});
+    const localJson = JSON.stringify(localBundle);
     const localStateJson = localStorage.getItem(STORAGE_KEY) || "";
     const localAccountsJson = localStorage.getItem(ACCOUNTS_KEY) || "{}";
     lastSaved = remoteJson;
-    if (remoteJson && remoteJson !== localJson && sessionStorage.getItem(HYDRATED_KEY) !== remoteJson) {
-      sessionStorage.setItem(HYDRATED_KEY, remoteJson);
-      if (remoteStateJson !== localStateJson) originalSetItem(STORAGE_KEY, remoteStateJson);
-      if (remoteAccountsJson !== localAccountsJson) originalSetItem(ACCOUNTS_KEY, remoteAccountsJson);
+    if (mergedJson && mergedJson !== localJson && sessionStorage.getItem(HYDRATED_KEY) !== mergedJson) {
+      sessionStorage.setItem(HYDRATED_KEY, mergedJson);
+      if (mergedStateJson !== localStateJson) originalSetItem(STORAGE_KEY, mergedStateJson);
+      if (mergedAccountsJson !== localAccountsJson) originalSetItem(ACCOUNTS_KEY, mergedAccountsJson);
       location.reload();
     }
   }
