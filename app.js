@@ -1764,12 +1764,16 @@ function renderNextAction(player) {
 }
 
 function nextActionMarkup(title, text, target, action, extraClass = "") {
+  const tournamentLine = hasTournament()
+    ? `<span class="next-action-tournament">${escapeHtml(state.tournament?.name || "大会未設定")} / ${escapeHtml(statusLabel(state.tournament?.status || "entry"))} / ${escapeHtml(formatStartAt(state.tournament?.startAt))}</span>`
+    : "";
   const button = target
     ? `<button class="primary-button next-action-button" type="button" data-go="${target}">${action}</button>`
     : `<button class="secondary-button next-action-button ${extraClass}" type="button">${action}</button>`;
   return `
     <div>
-      <span>Next</span>
+      <span>この大会で次にやること</span>
+      ${tournamentLine}
       <strong>${escapeHtml(title)}</strong>
       <p>${escapeHtml(text)}</p>
     </div>
@@ -2306,7 +2310,15 @@ function renderMyLobbies(playerId) {
   });
 
   if (!entries.length) {
-    els.myLobbyOutput.innerHTML = `<div class="empty-state">まだロビーが生成されていません。</div>`;
+    els.myLobbyOutput.innerHTML = `
+      <h3>自分のテーブル</h3>
+      <div class="my-lobby-tournament">
+        <span>大会</span>
+        <strong>${escapeHtml(state.tournament?.name || "大会未設定")}</strong>
+        <small>${escapeHtml(statusLabel(state.tournament?.status || "entry"))} / ${escapeHtml(formatStartAt(state.tournament?.startAt))}</small>
+      </div>
+      <div class="empty-state">まだロビーが生成されていません。大会開始後、ここに自分のテーブルが表示されます。</div>
+    `;
     return;
   }
 

@@ -1223,7 +1223,36 @@ main {
 
 .mypage-panel {
   display: grid;
+  gap: 18px;
+}
+
+.mypage-priority-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(280px, 0.85fr);
+  gap: 14px;
+  align-items: stretch;
+  border: 1px solid rgba(239, 197, 109, 0.26);
+  border-radius: 10px;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(239, 197, 109, 0.09), rgba(88, 199, 255, 0.05)),
+    rgba(255, 255, 255, 0.025);
+}
+
+.mypage-status-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.mypage-focus-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(260px, 0.85fr);
   gap: 16px;
+  align-items: start;
+}
+
+.mypage-focus-grid > * {
+  min-width: 0;
 }
 
 .mypage-main-grid {
@@ -1231,6 +1260,8 @@ main {
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
   gap: 16px;
   align-items: start;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
 }
 
 .mypage-left-stack,
@@ -1267,16 +1298,17 @@ main {
 
 .my-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .my-summary article {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  padding: 12px;
+  min-height: 74px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.045);
 }
 
@@ -1287,7 +1319,7 @@ main {
 
 .my-summary strong {
   color: var(--gold);
-  font-size: 1.28rem;
+  font-size: 1.2rem;
 }
 
 .my-lobby-output,
@@ -1308,10 +1340,14 @@ main {
   gap: 14px;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid rgba(239, 197, 109, 0.38);
-  border-radius: 8px;
-  padding: 14px;
-  background: linear-gradient(135deg, rgba(239, 197, 109, 0.14), rgba(88, 199, 255, 0.08));
+  min-height: 100%;
+  border: 1px solid rgba(239, 197, 109, 0.5);
+  border-radius: 10px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(239, 197, 109, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(239, 197, 109, 0.18), rgba(88, 199, 255, 0.09));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
 }
 
 .next-action-card span {
@@ -1320,19 +1356,31 @@ main {
   font-weight: 950;
 }
 
+.next-action-tournament {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted) !important;
+  font-size: 0.82rem !important;
+  line-height: 1.45;
+}
+
 .next-action-card strong {
   display: block;
-  margin-top: 2px;
-  font-size: 1.25rem;
+  margin-top: 8px;
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  line-height: 1.12;
 }
 
 .next-action-card p {
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--muted);
+  line-height: 1.55;
 }
 
 .next-action-button {
   flex: 0 0 auto;
+  min-width: 140px;
+  min-height: 48px;
 }
 
 .entry-cancel-card {
@@ -1342,7 +1390,8 @@ main {
   justify-content: space-between;
   border: 1px solid rgba(255, 100, 121, 0.25);
   border-radius: 8px;
-  padding: 12px;
+  min-height: 100%;
+  padding: 10px 12px;
   background: rgba(255, 100, 121, 0.07);
 }
 
@@ -1990,10 +2039,13 @@ main {
 }
 
 .my-lobby-card {
-  border: 1px solid rgba(239, 197, 109, 0.32);
-  border-radius: 8px;
-  padding: 12px;
-  background: rgba(239, 197, 109, 0.07);
+  border: 1px solid rgba(239, 197, 109, 0.42);
+  border-radius: 10px;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(239, 197, 109, 0.1), rgba(88, 199, 255, 0.06)),
+    rgba(255, 255, 255, 0.035);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.18);
 }
 
 .my-lobby-card.is-host {
@@ -2005,10 +2057,10 @@ main {
   display: grid;
   gap: 3px;
   border: 1px solid rgba(239, 197, 109, 0.28);
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 10px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .my-lobby-tournament span {
@@ -2019,7 +2071,7 @@ main {
 
 .my-lobby-tournament strong {
   color: var(--text);
-  font-size: 1.15rem;
+  font-size: 1.28rem;
 }
 
 .my-lobby-tournament small {
@@ -3742,8 +3794,18 @@ td { color: #f7ecd2; font-size: 0.93rem; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .mypage-priority-grid,
+  .mypage-focus-grid,
   .mypage-main-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mypage-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .my-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .system-guide-grid,
@@ -4141,6 +4203,16 @@ td { color: #f7ecd2; font-size: 0.93rem; }
     padding: 10px;
   }
 
+  .mypage-priority-grid,
+  .mypage-focus-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .mypage-priority-grid {
+    padding: 10px;
+  }
+
   .mypage-main-grid {
     display: flex;
     flex-direction: column;
@@ -4171,7 +4243,16 @@ td { color: #f7ecd2; font-size: 0.93rem; }
   }
 
   .next-action-card {
-    padding: 11px;
+    padding: 14px;
+    border-radius: 9px;
+  }
+
+  .next-action-card strong {
+    font-size: 1.35rem;
+  }
+
+  .next-action-card p {
+    font-size: 0.86rem;
   }
 
   .entry-cancel-card {

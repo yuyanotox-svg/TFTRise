@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TFTRise</title>
     <link rel="preconnect" href="https://cmsassets.rgpub.io" />
-    <link rel="stylesheet" href="./styles.css?v=137" />
+    <link rel="stylesheet" href="./styles.css?v=138" />
     <style>
       .owner-menu {
         position: relative;
@@ -393,16 +393,22 @@
           <p>ログイン中のアカウントの現在のテーブル、成績、総合順位を確認できます。</p>
         </div>
         <section class="panel mypage-panel">
-          <div id="myProfileOutput" class="my-profile-output profile-primary"></div>
-          <div id="myNextAction" class="next-action-card"></div>
-          <div class="mypage-main-grid">
-            <div class="mypage-left-stack">
+          <div class="mypage-priority-grid">
+            <div id="myNextAction" class="next-action-card"></div>
+            <div class="mypage-status-stack">
               <div id="mySummary" class="my-summary"></div>
               <div id="myEntryActions" class="my-entry-actions"></div>
-              <div id="myHistoryOutput" class="my-history-output"></div>
+            </div>
+          </div>
+          <div class="mypage-focus-grid">
+            <div id="myLobbyOutput" class="my-lobby-output"></div>
+            <div id="myHistoryOutput" class="my-history-output"></div>
+          </div>
+          <div class="mypage-main-grid">
+            <div class="mypage-left-stack">
+              <div id="myProfileOutput" class="my-profile-output profile-primary"></div>
             </div>
             <div class="mypage-right-stack">
-              <div id="myLobbyOutput" class="my-lobby-output"></div>
               <div id="myPastResultsOutput" class="my-past-results-output"></div>
             </div>
           </div>
@@ -891,7 +897,7 @@
         addEventListener("DOMContentLoaded", () => setTimeout(restore, 250));
       })();
     </script>
-    <script src="./remote-sync.js?v=137"></script>
-    <script src="./app.js?v=137"></script>
+    <script src="./remote-sync.js?v=138"></script>
+    <script src="./app.js?v=138"></script>
   </body>
 </html>
