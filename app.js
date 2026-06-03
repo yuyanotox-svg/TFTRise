@@ -1653,12 +1653,19 @@ function getAvailableReportTargets() {
     if (lobbyIndex < 0) continue;
     const lobby = lobbies[lobbyIndex];
     if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
+    if (hasCurrentPlayerResult(game)) continue;
     if (isGameReportClosed(game, lobbyIndex, lobby)) continue;
     const previousGames = (getLobbyBlocks()[blockIndex]?.games || []).filter((item) => item < game);
-    const previousDone = previousGames.every((previousGame) => isGameReportClosed(previousGame, lobbyIndex, lobby));
+    const previousDone = previousGames.every((previousGame) => (
+      isGameReportClosed(previousGame, lobbyIndex, lobby) || hasCurrentPlayerResult(previousGame)
+    ));
     if (previousDone) targets.push({ game, blockIndex, lobbyIndex, lobby });
   }
   return targets;
+}
+
+function hasCurrentPlayerResult(gameNo) {
+  return Boolean(currentUserId && state.results?.[gameNo]?.[currentUserId]);
 }
 
 function isGameReportClosed(gameNo, lobbyIndex, lobby) {
