@@ -909,6 +909,26 @@ function renderTopActions() {
   els.logoutTopBtn.classList.toggle("hidden", !currentProfile);
   const canReport = Boolean(getCurrentReportTarget());
   els.reportNavBtn.classList.toggle("hidden", !canReport);
+  renderMyPageGlobalAlert();
+}
+
+function renderMyPageGlobalAlert() {
+  const player = getPlayer(currentUserId);
+  const profile = currentProfile || player;
+  const alerts = [...getTournamentAlerts(player), ...getAccountAlerts(profile)];
+  const primary = alerts[0];
+  const topLabel = els.myPageTopBtn?.querySelector(".top-alert-label");
+  const mobileDot = document.querySelector(".mobile-nav-button[data-go='mypage'] .top-alert-dot");
+  if (topLabel) {
+    topLabel.classList.toggle("hidden", !primary);
+    topLabel.textContent = primary?.badge || "";
+  }
+  if (mobileDot) {
+    mobileDot.classList.toggle("hidden", !primary);
+  }
+  const title = primary ? `${primary.badge}: ${primary.text}` : "マイページ";
+  els.myPageTopBtn?.setAttribute("title", title);
+  document.querySelector(".mobile-nav-button[data-go='mypage']")?.setAttribute("title", title);
 }
 
 function renderAuthMode() {

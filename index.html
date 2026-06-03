@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TFTRise</title>
     <link rel="preconnect" href="https://cmsassets.rgpub.io" />
-    <link rel="stylesheet" href="./styles.css?v=141" />
+    <link rel="stylesheet" href="./styles.css?v=142" />
     <style>
       .owner-menu {
         position: relative;
@@ -206,7 +206,7 @@
         <button class="nav-button" type="button" data-go="system">システム</button>
         <button id="reportNavBtn" class="nav-button hidden" type="button" data-go="report">結果報告</button>
       </nav>
-      <button id="myPageTopBtn" class="mypage-top-button" type="button" data-go="mypage">マイページ</button>
+      <button id="myPageTopBtn" class="mypage-top-button" type="button" data-go="mypage">マイページ<span class="top-alert-label hidden"></span></button>
       <button id="adminOpenBtn" class="admin-open hidden" type="button">管理画面</button>
     </header>
     <div id="entryCompleteToast" class="entry-complete-toast hidden">
@@ -218,7 +218,7 @@
       <button class="nav-button mobile-nav-button active" type="button" data-go="home"><span>大会</span></button>
       <button class="nav-button mobile-nav-button" type="button" data-go="past"><span>記録</span></button>
       <button class="nav-button mobile-nav-button" type="button" data-go="report"><span>報告</span></button>
-      <button class="nav-button mobile-nav-button" type="button" data-go="mypage"><span>マイ</span></button>
+      <button class="nav-button mobile-nav-button" type="button" data-go="mypage"><span>マイ</span><b class="top-alert-dot hidden"></b></button>
       <button class="nav-button mobile-nav-button" type="button" data-go="system"><span>設定</span></button>
     </nav>
 
@@ -906,7 +906,7 @@
         addEventListener("DOMContentLoaded", () => setTimeout(restore, 250));
       })();
     </script>
-    <script src="./remote-sync.js?v=141"></script>
-    <script src="./app.js?v=141"></script>
+    <script src="./remote-sync.js?v=142"></script>
+    <script src="./app.js?v=142"></script>
   </body>
 </html>
