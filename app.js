@@ -44,6 +44,7 @@ function defaultTournament() {
 const defaultState = () => ({
   activeTournamentId: "",
   tournaments: [],
+  deletedTournaments: {},
   tournament: null,
   players: [],
   lobbies: [[], [], []],
@@ -262,6 +263,7 @@ function loadState() {
 
 function saveState() {
   if (hasTournament()) syncActiveTournament();
+  state.deletedTournaments = state.deletedTournaments || {};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -285,10 +287,25 @@ function snapshotCurrentTournament(source = state) {
 function syncActiveTournament() {
   const snapshot = snapshotCurrentTournament();
   if (!snapshot) return;
+  state.deletedTournaments = state.deletedTournaments || {};
+  if (state.deletedTournaments[snapshot.id]) return;
   const index = state.tournaments.findIndex((item) => item.id === snapshot.id);
   if (index >= 0) state.tournaments[index] = snapshot;
   else state.tournaments.push(snapshot);
   state.activeTournamentId = snapshot.id;
+}
+
+function markTournamentDeleted(id) {
+  if (!id) return;
+  state.deletedTournaments = state.deletedTournaments || {};
+  state.deletedTournaments[id] = new Date().toISOString();
+}
+
+function markAllTournamentsDeleted() {
+  state.deletedTournaments = state.deletedTournaments || {};
+  (state.tournaments || []).forEach((item) => markTournamentDeleted(item.id));
+  if (state.activeTournamentId) markTournamentDeleted(state.activeTournamentId);
+  if (state.tournament?.id) markTournamentDeleted(state.tournament.id);
 }
 
 function automatedTournamentStatus(tournament) {
@@ -488,6 +505,8 @@ function executeDeleteCurrentTournament() {
   }
   const name = state.tournament.name || "現在の大会";
   exportStateBackup("before-delete-tournament");
+  markTournamentDeleted(state.activeTournamentId);
+  markTournamentDeleted(state.tournament?.id);
   state.tournaments = state.tournaments.filter((item) => item.id !== state.activeTournamentId);
   if (!state.tournaments.length) {
     clearActiveTournament();
@@ -521,6 +540,7 @@ function executeDeleteAllTournaments() {
     return;
   }
   exportStateBackup("before-delete-all");
+  markAllTournamentsDeleted();
   clearActiveTournament();
   render();
   go("admin");
@@ -578,6 +598,7 @@ function clearActiveTournament() {
   state.results = {};
   state.reports = [];
   state.tournaments = [];
+  state.deletedTournaments = state.deletedTournaments || {};
 }
 
 function exportStateBackup(reason = "manual-export") {

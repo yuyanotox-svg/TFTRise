@@ -116,6 +116,17 @@ function safeJson(value) {
 function normalizeServerState(data) {
   if (!data || typeof data !== "object") return data;
   const normalized = clone(data);
+  normalized.deletedTournaments = normalized.deletedTournaments || {};
+  normalized.tournaments = (normalized.tournaments || []).filter((item) => !normalized.deletedTournaments[item?.id]);
+  if (normalized.tournament?.id && normalized.deletedTournaments[normalized.tournament.id]) {
+    normalized.activeTournamentId = "";
+    normalized.tournament = null;
+    normalized.players = [];
+    normalized.lobbies = [];
+    normalized.lobbyHosts = [];
+    normalized.results = {};
+    normalized.reports = [];
+  }
   const snapshots = [];
   (normalized.tournaments || []).forEach((item) => snapshots.push(item));
   if (normalized.tournament) {

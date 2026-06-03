@@ -102,10 +102,12 @@
   }
 
   function mergeState(remoteState, localState) {
-    if (!remoteState?.tournament && !remoteState?.tournaments?.length) return localState || {};
-    if (!localState?.tournament && !localState?.tournaments?.length) return remoteState || {};
+    const deletedTournaments = mergeDeletedTournaments(remoteState?.deletedTournaments, localState?.deletedTournaments);
+    if (!remoteState?.tournament && !remoteState?.tournaments?.length) return { ...(localState || {}), deletedTournaments };
+    if (!localState?.tournament && !localState?.tournaments?.length) return filterDeletedState({ ...(remoteState || {}), deletedTournaments });
 
     const merged = { ...remoteState };
+    merged.deletedTournaments = deletedTournaments;
     const tournamentMap = new Map();
     collectTournamentSnapshots(remoteState).forEach((snapshot) => tournamentMap.set(snapshot.id, snapshot));
     collectTournamentSnapshots(localState).forEach((snapshot) => {
@@ -113,6 +115,7 @@
       tournamentMap.set(snapshot.id, previous ? mergeTournamentSnapshot(previous, snapshot) : snapshot);
     });
 
+    Object.keys(deletedTournaments).forEach((id) => tournamentMap.delete(id));
     merged.tournaments = [...tournamentMap.values()];
     const activeId = chooseActiveTournamentId(remoteState, localState, merged.tournaments);
     const active = tournamentMap.get(activeId) || merged.tournaments[0];
@@ -125,7 +128,41 @@
       merged.results = active.results || {};
       merged.reports = active.reports || [];
     }
+    if (!active) {
+      merged.activeTournamentId = "";
+      merged.tournament = null;
+      merged.players = [];
+      merged.lobbies = [];
+      merged.lobbyHosts = [];
+      merged.results = {};
+      merged.reports = [];
+    }
     return merged;
+  }
+
+  function mergeDeletedTournaments(remoteDeleted = {}, localDeleted = {}) {
+    const merged = { ...(remoteDeleted || {}) };
+    Object.entries(localDeleted || {}).forEach(([id, deletedAt]) => {
+      if (!id) return;
+      if (!merged[id] || String(deletedAt || "") > String(merged[id] || "")) merged[id] = deletedAt || new Date().toISOString();
+    });
+    return merged;
+  }
+
+  function filterDeletedState(stateValue) {
+    const deleted = stateValue?.deletedTournaments || {};
+    const filtered = { ...(stateValue || {}), deletedTournaments: deleted };
+    filtered.tournaments = (filtered.tournaments || []).filter((item) => !deleted[item.id]);
+    if (filtered.tournament?.id && deleted[filtered.tournament.id]) {
+      filtered.activeTournamentId = "";
+      filtered.tournament = null;
+      filtered.players = [];
+      filtered.lobbies = [];
+      filtered.lobbyHosts = [];
+      filtered.results = {};
+      filtered.reports = [];
+    }
+    return filtered;
   }
 
   function chooseActiveTournamentId(remoteState, localState, tournaments) {
@@ -167,11 +204,14 @@
   function collectTournamentSnapshots(stateValue) {
     const snapshots = [];
     (stateValue?.tournaments || []).forEach((item) => {
+      if (stateValue?.deletedTournaments?.[item?.id]) return;
       if (item?.id) snapshots.push(normalizeSnapshot(item));
     });
     if (stateValue?.tournament) {
+      const activeId = stateValue.tournament.id || stateValue.activeTournamentId || "main";
+      if (stateValue?.deletedTournaments?.[activeId]) return snapshots;
       snapshots.push(normalizeSnapshot({
-        id: stateValue.tournament.id || stateValue.activeTournamentId || "main",
+        id: activeId,
         tournament: stateValue.tournament,
         players: stateValue.players || [],
         lobbies: stateValue.lobbies || [],
