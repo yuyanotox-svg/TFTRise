@@ -490,6 +490,25 @@ function ensureActiveTournamentForMyPage() {
   localStorage.setItem(SESSION_KEY, currentUserId);
 }
 
+function ensureReportTournament() {
+  const profileMatch = findTournamentForCurrentProfile();
+  if (profileMatch && tournamentHasLobbies(profileMatch.tour)) {
+    if (state.activeTournamentId !== profileMatch.tour.id) setActiveTournamentFromSnapshot(profileMatch.tour);
+    currentUserId = profileMatch.player.id;
+    localStorage.setItem(SESSION_KEY, currentUserId);
+    return;
+  }
+  if (hasTournament() && tournamentHasLobbies(state)) return;
+  const liveWithLobbies = (state.tournaments || [])
+    .filter((item) => ["live", "ready"].includes(item.tournament?.status) && tournamentHasLobbies(item))
+    .sort((a, b) => new Date(b.tournament?.startAt || 0) - new Date(a.tournament?.startAt || 0))[0];
+  if (liveWithLobbies) setActiveTournamentFromSnapshot(liveWithLobbies);
+}
+
+function tournamentHasLobbies(tour) {
+  return (tour?.lobbies || []).some((block) => (block || []).some((lobby) => lobby?.length));
+}
+
 function createTournament() {
   if (hasTournament()) syncActiveTournament();
   const tournament = defaultTournament();
@@ -900,7 +919,7 @@ function render() {
   }
   prunePrematureLobbies();
   if (hasTournament()) syncActiveTournament();
-  if (location.hash === "#report") ensureActiveTournamentForMyPage();
+  if (location.hash === "#report") ensureReportTournament();
   ensureActiveHomeTournament();
   renderHome();
   renderPastTournaments();
@@ -1687,7 +1706,24 @@ function getAvailableReportTargets() {
   }
   if (targets.length) return targets;
   const fallback = getFallbackReportTargetFromCurrentLobby();
-  return fallback ? [fallback] : [];
+  return fallback ? [fallback] : getAllOpenReportTargets();
+}
+
+function getAllOpenReportTargets() {
+  if (!hasTournament() || state.tournament?.status !== "live") return [];
+  const targets = [];
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    const lobbies = state.lobbies[blockIndex] || [];
+    lobbies.forEach((lobby, lobbyIndex) => {
+      const game = block.games.find((gameNo) => (
+        !hasSubmittedReportForGameLobby(gameNo, lobbyIndex + 1)
+        && !hasAnyLobbyResult(gameNo, lobby)
+        && !isGameReportClosed(gameNo, lobbyIndex, lobby)
+      ));
+      if (game) targets.push({ game, blockIndex, lobbyIndex, lobby });
+    });
+  });
+  return targets;
 }
 
 function getFallbackReportTargetFromCurrentLobby() {
@@ -1712,6 +1748,11 @@ function getFallbackReportTargetFromCurrentLobby() {
 function hasCurrentPlayerResult(gameNo) {
   const playerId = getCurrentTournamentPlayerId();
   return Boolean(playerId && state.results?.[gameNo]?.[playerId]);
+}
+
+function hasAnyLobbyResult(gameNo, lobby = []) {
+  const results = state.results?.[gameNo] || {};
+  return (lobby || []).some((playerId) => Boolean(results[playerId]));
 }
 
 function isGameReportClosed(gameNo, lobbyIndex, lobby) {
