@@ -2541,6 +2541,7 @@ function renderMyLobbies(playerId) {
     card.className = "my-lobby-card";
     const hostId = state.lobbyHosts?.[getBlockIndex(entry.block.games[0])]?.[entry.lobbyIndex];
     const isHost = hostId === playerId;
+    const canOpenReport = state.tournament?.status === "live";
     if (isHost) card.classList.add("is-host");
     card.innerHTML = `
       <div class="my-lobby-head">
@@ -2552,6 +2553,9 @@ function renderMyLobbies(playerId) {
         <button class="secondary-button lobby-guide-button" type="button">テーブルの作り方</button>
       </div>
     `;
+    if (canOpenReport) {
+      card.querySelector(".host-line")?.insertAdjacentHTML("beforeend", `<button class="primary-button my-lobby-report-button" type="button" data-go="report">結果報告へ</button>`);
+    }
     const ol = document.createElement("ol");
     entry.lobby.forEach((id) => {
       const player = getPlayer(id);
@@ -4160,6 +4164,11 @@ els.lobbyGuideDialog.addEventListener("click", (event) => {
 });
 
 els.myLobbyOutput.addEventListener("click", (event) => {
+  const goButton = event.target.closest("[data-go]");
+  if (goButton) {
+    go(goButton.dataset.go);
+    return;
+  }
   if (!event.target.closest(".lobby-guide-button")) return;
   els.lobbyGuideDialog.showModal();
 });

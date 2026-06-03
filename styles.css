@@ -2343,6 +2343,11 @@ main {
   background: rgba(255, 100, 121, 0.12);
 }
 
+.my-lobby-report-button {
+  min-width: 132px;
+  box-shadow: 0 10px 24px rgba(255, 210, 102, 0.18);
+}
+
 .entry-form, .report-grid, .admin-login {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
