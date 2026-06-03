@@ -194,6 +194,7 @@ const els = {
   startTournamentBtn: document.querySelector("#startTournamentBtn"),
   finishTournamentBtn: document.querySelector("#finishTournamentBtn"),
   generateAllBtn: document.querySelector("#generateAllBtn"),
+  autoDebugResultsBtn: document.querySelector("#autoDebugResultsBtn"),
   blockActions: document.querySelector(".block-actions"),
   seed256Btn: document.querySelector("#seed256Btn"),
   exportBtn: document.querySelector("#exportBtn"),
@@ -1615,9 +1616,18 @@ function getCurrentReportTarget() {
     const lobby = lobbies[lobbyIndex];
     const results = state.results[game] || {};
     const completed = lobby.length && lobby.every((playerId) => results[playerId]);
+    if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
     if (!completed) return { game, blockIndex, lobbyIndex, lobby };
   }
   return null;
+}
+
+function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
+  return (state.reports || []).some((report) => (
+    report.status !== "rejected"
+    && Number(report.game) === Number(gameNo)
+    && Number(report.lobby) === Number(lobbyNo)
+  ));
 }
 
 function renderMyPage() {
@@ -2514,7 +2524,7 @@ function renderManualFallback() {
     const row = document.createElement("label");
     row.className = "manual-row";
     row.innerHTML = `
-      <span class="player-meta"><strong>${escapeHtml(player.displayName)}</strong><span>${escapeHtml(player.discordId)}</span></span>
+      <span class="player-meta"><strong>${escapeHtml(player.displayName)}</strong><span>${escapeHtml(player.riotId || "-")}</span></span>
     `;
     const select = document.createElement("select");
     select.dataset.player = player.id;
@@ -3121,11 +3131,15 @@ function renderAdminResults() {
       const submitter = report.submitter || {};
       const winner = getPlayer(report.winnerId) || (submitter.id ? getPlayer(submitter.id) : null);
       const matchSummary = summarizeReportMatches(report.matches || []);
+      const status = report.status || "approved";
+      const statusLabel = { pending: "承認待ち", approved: "承認済み", rejected: "却下" }[status] || "承認済み";
+      const methodLabel = { image: "画像提出", manual: "手動提出", debug: "デバッグ自動" }[report.method] || "提出";
       const item = document.createElement("article");
-      item.className = `report-history-item ${report.method === "image" ? "is-image" : "is-manual"}`;
+      item.className = `report-history-item ${report.method === "image" ? "is-image" : "is-manual"} is-${status}`;
       item.innerHTML = `
         <div class="report-history-main">
-          <span class="report-method">${report.method === "image" ? "画像提出" : "手動提出"}</span>
+          <span class="report-method">${escapeHtml(methodLabel)}</span>
+          <span class="report-review-status">${escapeHtml(statusLabel)}</span>
           <strong>${escapeHtml(report.tournamentName || state.tournament?.name || "大会未選択")} / Game ${escapeHtml(String(report.game || "-"))} / Lobby ${escapeHtml(String(report.lobby || "-"))}</strong>
           <small>${escapeHtml(formatReportTime(report.submittedAt))}</small>
         </div>
@@ -3144,6 +3158,12 @@ function renderAdminResults() {
           <span>提出内容</span>
           <strong>${matchSummary.count}名 / ${matchSummary.completeness}</strong>
           <small>${escapeHtml(matchSummary.text)}</small>
+          ${status === "pending" ? `
+            <div class="report-review-actions">
+              <button class="primary-button approve-report" type="button" data-report-id="${escapeHtml(report.id)}">承認して反映</button>
+              <button class="danger-button reject-report" type="button" data-report-id="${escapeHtml(report.id)}">却下</button>
+            </div>
+          ` : report.reviewedAt ? `<small>確認: ${escapeHtml(formatReportTime(report.reviewedAt))}</small>` : ""}
         </div>
       `;
       history.append(item);
@@ -3203,6 +3223,42 @@ function summarizeReportMatches(matches) {
   return { count, completeness, text };
 }
 
+function approveReport(reportId) {
+  const report = (state.reports || []).find((item) => item.id === reportId);
+  if (!report) return;
+  if (report.status === "approved") {
+    notify("承認済み", "この報告はすでに反映されています。", "warn");
+    return;
+  }
+  const gameNo = Number(report.game);
+  if (!gameNo || !(report.matches || []).length) {
+    notify("承認できません", "報告内容が不足しています。", "warn");
+    return;
+  }
+  state.results[gameNo] = state.results[gameNo] || {};
+  (report.matches || []).forEach((match) => {
+    if (match.playerId && match.placement) state.results[gameNo][match.playerId] = String(match.placement);
+  });
+  report.status = "approved";
+  report.reviewedAt = new Date().toISOString();
+  report.reviewedBy = "admin";
+  maybeFinishTournamentAutomatically();
+  maybeGenerateNextLobbyBlock();
+  render();
+  notify("結果を承認しました", `Game ${gameNo} の結果を反映しました。`, "success");
+}
+
+function rejectReport(reportId) {
+  const report = (state.reports || []).find((item) => item.id === reportId);
+  if (!report) return;
+  if (!confirm("この結果報告を却下しますか？")) return;
+  report.status = "rejected";
+  report.reviewedAt = new Date().toISOString();
+  report.reviewedBy = "admin";
+  render();
+  notify("報告を却下しました", "結果には反映していません。", "success");
+}
+
 function renderStandings() {
   const standings = calculateStandings();
   els.standingsTable.innerHTML = "";
@@ -3255,14 +3311,8 @@ function submitOcrReport() {
   if (!gameNo) return setReportStatus("あなたの現在の報告対象ロビーがありません。");
   const validation = validateReportMatches(latestReportMatches);
   if (!validation.ok) return setReportStatus(validation.message);
-  state.results[gameNo] = state.results[gameNo] || {};
-  latestReportMatches.forEach((match) => {
-    state.results[gameNo][match.playerId] = String(match.placement);
-  });
   addReport("image", latestReportMatches);
-  maybeFinishTournamentAutomatically();
-  maybeGenerateNextLobbyBlock();
-  setReportStatus("報告を受け付けました。必要があれば管理者が修正します。");
+  setReportStatus("報告を受け付けました。管理者の承認後に結果へ反映されます。");
   render();
 }
 
@@ -3277,14 +3327,8 @@ function submitManualReport() {
   const validation = validateReportMatches(matches);
   if (!validation.ok) return setReportStatus(validation.message);
 
-  state.results[gameNo] = state.results[gameNo] || {};
-  matches.forEach((match) => {
-    state.results[gameNo][match.playerId] = String(match.placement);
-  });
   addReport("manual", matches);
-  maybeFinishTournamentAutomatically();
-  maybeGenerateNextLobbyBlock();
-  setReportStatus("手動報告を受け付けました。");
+  setReportStatus("手動報告を受け付けました。管理者の承認後に結果へ反映されます。");
   render();
 }
 
@@ -3308,6 +3352,9 @@ function addReport(method, matches) {
       xAccount: submitterProfile.xAccount || "",
     },
     submittedAt: new Date().toISOString(),
+    status: "pending",
+    reviewedAt: "",
+    reviewedBy: "",
     matches,
   });
 }
@@ -3344,6 +3391,15 @@ function validateReportMatches(matches) {
   const alreadyReported = normalized.filter((match) => existing[match.playerId]);
   if (alreadyReported.length) {
     return { ok: false, message: "この試合はすでに一部結果が入っています。修正が必要な場合は管理者へ連絡してください。" };
+  }
+
+  const pendingReport = (state.reports || []).find((report) => (
+    report.status !== "rejected"
+    && Number(report.game) === Number(target.game)
+    && Number(report.lobby) === Number(target.lobbyIndex + 1)
+  ));
+  if (pendingReport) {
+    return { ok: false, message: "この試合はすでに報告済み、または承認待ちです。管理者の確認を待ってください。" };
   }
 
   if (normalized.length < Math.min(4, target.lobby.length)) {
@@ -3440,6 +3496,7 @@ function buildLobbiesForBlock(blockIndex) {
 
 function generateBlock(blockIndex) {
   buildLobbiesForBlock(blockIndex);
+  autoReportDebugOnlyLobbies();
   render();
 }
 
@@ -3451,6 +3508,7 @@ function generateNextLobbyBlock({ silent = false } = {}) {
   const index = nextLobbyBlockIndex();
   if (index < 0) return false;
   buildLobbiesForBlock(index);
+  autoReportDebugOnlyLobbies();
   if (!silent) render();
   return true;
 }
@@ -3514,6 +3572,61 @@ function fillDebugPlayersToCapacity() {
   state.reports = [];
   render();
   notify("デバッグ参加者を追加しました", `${added}名を追加し、${state.players.length}名をチェックイン済みにしました。`, "success");
+}
+
+function isDebugPlayer(player) {
+  return /^DebugPlayer\d{3}/.test(player?.displayName || "") || /^DebugPlayer\d{3}#/.test(player?.riotId || "");
+}
+
+function autoReportDebugOnlyLobbies() {
+  if (!hasTournament()) return 0;
+  let created = 0;
+  getLobbyBlocks().forEach((block, blockIndex) => {
+    const lobbies = state.lobbies?.[blockIndex] || [];
+    lobbies.forEach((lobby, lobbyIndex) => {
+      const players = lobby.map((id) => getPlayer(id)).filter(Boolean);
+      if (!players.length || !players.every(isDebugPlayer)) return;
+      block.games.forEach((gameNo) => {
+        const existing = state.results?.[gameNo] || {};
+        if (players.some((player) => existing[player.id])) return;
+        const placements = shuffle(players.map((player) => player.id)).map((playerId, index) => ({
+          playerId,
+          placement: index + 1,
+          confidence: 1,
+        }));
+        state.results[gameNo] = state.results[gameNo] || {};
+        placements.forEach((match) => {
+          state.results[gameNo][match.playerId] = String(match.placement);
+        });
+        state.reports.unshift({
+          id: uid(),
+          tournamentId: state.activeTournamentId || state.tournament?.id || "",
+          tournamentName: state.tournament?.name || "",
+          method: "debug",
+          game: gameNo,
+          lobby: lobbyIndex + 1,
+          winnerId: placements.find((match) => match.placement === 1)?.playerId || "",
+          submitter: {
+            id: "debug-auto",
+            displayName: "Debug Auto",
+            riotId: "",
+            discordId: "",
+            xAccount: "",
+          },
+          submittedAt: new Date().toISOString(),
+          status: "approved",
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: "debug-auto",
+          matches: placements,
+        });
+        created += 1;
+      });
+    });
+  });
+  if (created) {
+    maybeFinishTournamentAutomatically();
+  }
+  return created;
 }
 
 function updateAdminResult(gameNo, playerId, placement) {
@@ -4241,10 +4354,25 @@ els.blockActions.addEventListener("click", (event) => {
   generateBlock(Number(button.dataset.block));
 });
 els.generateAllBtn.addEventListener("click", () => generateAllLobbies());
+els.autoDebugResultsBtn?.addEventListener("click", () => {
+  const created = autoReportDebugOnlyLobbies();
+  render();
+  if (created) notify("デバッグ結果を入力しました", `${created}試合分を自動入力しました。`, "success");
+  else notify("対象なし", "デバッグ参加者だけの未入力ロビーはありません。", "warn");
+});
 els.seed256Btn.addEventListener("click", fillDebugPlayersToCapacity);
 els.adminResultsOutput.addEventListener("change", (event) => {
   if (event.target.tagName !== "SELECT") return;
   updateAdminResult(event.target.dataset.game, event.target.dataset.player, event.target.value);
+});
+els.adminResultsOutput.addEventListener("click", (event) => {
+  const approve = event.target.closest(".approve-report");
+  if (approve) {
+    approveReport(approve.dataset.reportId);
+    return;
+  }
+  const reject = event.target.closest(".reject-report");
+  if (reject) rejectReport(reject.dataset.reportId);
 });
 
 els.exportBtn.addEventListener("click", () => {
