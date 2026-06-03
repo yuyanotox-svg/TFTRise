@@ -1226,9 +1226,62 @@ main {
   gap: 18px;
 }
 
+.mypage-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.mypage-tab {
+  position: relative;
+  min-height: 52px;
+  border: 1px solid rgba(88, 199, 255, 0.22);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(88, 199, 255, 0.075);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.mypage-tab.active {
+  border-color: rgba(239, 197, 109, 0.62);
+  color: #160d05;
+  background: linear-gradient(180deg, #ffe1a0, #d69a35);
+  box-shadow: 0 14px 34px rgba(239, 197, 109, 0.18);
+}
+
+.tab-alert {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #080912;
+  border-radius: 999px;
+  color: #fff;
+  background: #ff4f68;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.mypage-tab-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.mypage-tab-panel.hidden {
+  display: none;
+}
+
 .mypage-priority-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 1.15fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(420px, 1.3fr) minmax(280px, 0.7fr);
   gap: 14px;
   align-items: stretch;
   border: 1px solid rgba(239, 197, 109, 0.26);
@@ -1298,7 +1351,7 @@ main {
 
 .my-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 8px;
 }
 
@@ -1333,6 +1386,26 @@ main {
 .my-entry-actions {
   display: grid;
   gap: 10px;
+}
+
+.mypage-account-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(239, 197, 109, 0.22);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.mypage-account-head h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.mypage-account-grid {
+  max-width: 920px;
 }
 
 .next-action-card {
@@ -4203,6 +4276,16 @@ td { color: #f7ecd2; font-size: 0.93rem; }
     padding: 10px;
   }
 
+  .mypage-tabs {
+    gap: 8px;
+    padding: 6px;
+  }
+
+  .mypage-tab {
+    min-height: 48px;
+    font-size: 0.9rem;
+  }
+
   .mypage-priority-grid,
   .mypage-focus-grid {
     grid-template-columns: 1fr;
@@ -4211,6 +4294,12 @@ td { color: #f7ecd2; font-size: 0.93rem; }
 
   .mypage-priority-grid {
     padding: 10px;
+  }
+
+  .mypage-account-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
   }
 
   .mypage-main-grid {

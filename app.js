@@ -2,6 +2,7 @@ const STORAGE_KEY = "tft-space-gods-cup";
 const SESSION_KEY = "tftrise-current-user";
 const PROFILE_KEY = "tftrise-profile";
 const ACCOUNTS_KEY = "tftrise-accounts";
+const MY_PAGE_TAB_KEY = "tftrise-mypage-tab";
 const BLOCKS = [
   { label: "第1ブロック", games: [1, 2] },
   { label: "第2ブロック", games: [3, 4] },
@@ -57,6 +58,7 @@ let state = loadState();
 let currentUserId = localStorage.getItem(SESSION_KEY) || "";
 let currentProfile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
 let pendingDeleteMode = "";
+let currentMyPageTab = localStorage.getItem(MY_PAGE_TAB_KEY) || "tournament";
 if (!currentProfile && currentUserId) {
   const player = state.players.find((item) => item.id === currentUserId);
   if (player) currentProfile = {
@@ -150,6 +152,11 @@ const els = {
   mySummary: document.querySelector("#mySummary"),
   myNextAction: document.querySelector("#myNextAction"),
   myEntryActions: document.querySelector("#myEntryActions"),
+  myPageTabs: document.querySelector("#myPageTabs"),
+  myTournamentPanel: document.querySelector("#myTournamentPanel"),
+  myAccountPanel: document.querySelector("#myAccountPanel"),
+  myTournamentBadge: document.querySelector("#myTournamentBadge"),
+  myAccountBadge: document.querySelector("#myAccountBadge"),
   myProfileOutput: document.querySelector("#myProfileOutput"),
   myLobbyOutput: document.querySelector("#myLobbyOutput"),
   myHistoryOutput: document.querySelector("#myHistoryOutput"),
@@ -1604,6 +1611,7 @@ function renderMyPage() {
     els.myLobbyOutput.innerHTML = "";
     els.myHistoryOutput.innerHTML = "";
     els.myPastResultsOutput.innerHTML = "";
+    renderMyPageTabs(null, null);
     return;
   }
 
@@ -1619,6 +1627,7 @@ function renderMyPage() {
     els.myLobbyOutput.innerHTML = "";
     els.myHistoryOutput.innerHTML = `<div class="empty-state">大会ポップからエントリーすると、この大会の成績が表示されます。</div>`;
     renderPastResults(profile);
+    renderMyPageTabs(profile, null);
     return;
   }
   const history = [1, 2, 3, 4, 5, 6].map((gameNo) => Number(state.results[gameNo]?.[playerId] || 0));
@@ -1656,7 +1665,47 @@ function renderMyPage() {
   renderMyLobbies(playerId);
   renderMyHistory(history);
   renderPastResults(player);
+  renderMyPageTabs(player, player);
   maybeShowHostDialog(playerId);
+}
+
+function renderMyPageTabs(profile, player) {
+  if (!["tournament", "account"].includes(currentMyPageTab)) currentMyPageTab = "tournament";
+  const tournamentAlerts = countTournamentAlerts(player);
+  const accountAlerts = countAccountAlerts(profile);
+  els.myTournamentPanel?.classList.toggle("hidden", currentMyPageTab !== "tournament");
+  els.myAccountPanel?.classList.toggle("hidden", currentMyPageTab !== "account");
+  els.myPageTabs?.querySelectorAll("[data-my-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.myTab === currentMyPageTab);
+  });
+  updateTabAlert(els.myTournamentBadge, tournamentAlerts);
+  updateTabAlert(els.myAccountBadge, accountAlerts);
+}
+
+function updateTabAlert(element, count) {
+  if (!element) return;
+  element.classList.toggle("hidden", !count);
+  element.textContent = count > 9 ? "9+" : String(count || "!");
+}
+
+function countTournamentAlerts(player) {
+  if (!currentProfile) return 0;
+  if (!hasTournament()) return 0;
+  const checkInState = checkInWindowState();
+  if (!player) return 1;
+  if (!player.checkedInAt && checkInState.state === "open") return 1;
+  if (getCurrentReportTarget()) return 1;
+  if (player.didNotCheckIn && ["ready", "live", "finished"].includes(state.tournament?.status)) return 1;
+  return 0;
+}
+
+function countAccountAlerts(profile) {
+  if (!profile) return 0;
+  let count = 0;
+  if (!getCurrentAccountEmail()) count += 1;
+  if (!isValidRiotId(profile.riotId || "")) count += 1;
+  if (!profile.discordId) count += 1;
+  return count;
 }
 
 function renderMyProfile(profile) {
@@ -3832,6 +3881,13 @@ els.logoutTopBtn.addEventListener("click", () => {
 els.myEntryActions.addEventListener("click", (event) => {
   if (!event.target.closest(".cancel-entry-button")) return;
   cancelCurrentEntry();
+});
+els.myPageTabs?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-my-tab]");
+  if (!button) return;
+  currentMyPageTab = button.dataset.myTab;
+  localStorage.setItem(MY_PAGE_TAB_KEY, currentMyPageTab);
+  renderMyPage();
 });
 els.myNextAction.addEventListener("click", (event) => {
   const checkIn = event.target.closest(".check-in-now");

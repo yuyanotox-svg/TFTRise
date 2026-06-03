@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TFTRise</title>
     <link rel="preconnect" href="https://cmsassets.rgpub.io" />
-    <link rel="stylesheet" href="./styles.css?v=139" />
+    <link rel="stylesheet" href="./styles.css?v=140" />
     <style>
       .owner-menu {
         position: relative;
@@ -393,27 +393,35 @@
           <p>ログイン中のアカウントの現在のテーブル、成績、総合順位を確認できます。</p>
         </div>
         <section class="panel mypage-panel">
-          <div class="mypage-priority-grid">
-            <div id="myNextAction" class="next-action-card"></div>
-            <div class="mypage-status-stack">
-              <div id="mySummary" class="my-summary"></div>
-              <div id="myEntryActions" class="my-entry-actions"></div>
+          <div id="myPageTabs" class="mypage-tabs">
+            <button class="mypage-tab active" type="button" data-my-tab="tournament">大会情報<span id="myTournamentBadge" class="tab-alert hidden">!</span></button>
+            <button class="mypage-tab" type="button" data-my-tab="account">アカウント設定<span id="myAccountBadge" class="tab-alert hidden">!</span></button>
+          </div>
+          <div id="myTournamentPanel" class="mypage-tab-panel">
+            <div class="mypage-priority-grid">
+              <div id="myNextAction" class="next-action-card"></div>
+              <div class="mypage-status-stack">
+                <div id="mySummary" class="my-summary"></div>
+                <div id="myEntryActions" class="my-entry-actions"></div>
+              </div>
             </div>
+            <div class="mypage-focus-grid">
+              <div id="myLobbyOutput" class="my-lobby-output"></div>
+              <div id="myHistoryOutput" class="my-history-output"></div>
+            </div>
+            <div id="myPastResultsOutput" class="my-past-results-output"></div>
           </div>
-          <div class="mypage-focus-grid">
-            <div id="myLobbyOutput" class="my-lobby-output"></div>
-            <div id="myHistoryOutput" class="my-history-output"></div>
-          </div>
-          <div class="mypage-main-grid">
-            <div class="mypage-left-stack">
+          <div id="myAccountPanel" class="mypage-tab-panel hidden">
+            <div class="mypage-account-head">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h3>アカウント設定</h3>
+              </div>
+              <button id="logoutTopBtn" class="logout-button hidden" type="button">ログアウト</button>
+            </div>
+            <div class="mypage-account-grid">
               <div id="myProfileOutput" class="my-profile-output profile-primary"></div>
             </div>
-            <div class="mypage-right-stack">
-              <div id="myPastResultsOutput" class="my-past-results-output"></div>
-            </div>
-          </div>
-          <div class="mypage-actions">
-            <button id="logoutTopBtn" class="logout-button hidden" type="button">ログアウト</button>
           </div>
         </section>
       </section>
@@ -897,7 +905,7 @@
         addEventListener("DOMContentLoaded", () => setTimeout(restore, 250));
       })();
     </script>
-    <script src="./remote-sync.js?v=139"></script>
-    <script src="./app.js?v=139"></script>
+    <script src="./remote-sync.js?v=140"></script>
+    <script src="./app.js?v=140"></script>
   </body>
 </html>
