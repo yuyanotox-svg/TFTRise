@@ -1146,6 +1146,13 @@ function renderEntryCta(status) {
     els.homeEntryBtn.disabled = true;
     return;
   }
+  if (status === "none" || status === "finished") {
+    els.entryCtaTitle.textContent = "受付中の大会はありません";
+    els.entryCtaText.textContent = "終了した大会の最終順位と成績は、記録ページから確認できます。";
+    els.homeEntryBtn.textContent = "記録を見る";
+    els.homeEntryBtn.disabled = false;
+    return;
+  }
   if (!loggedIn) {
     els.entryCtaTitle.textContent = "まずはTFTRiseにログイン";
     els.entryCtaText.textContent = "アカウントを作れば、次から大会エントリーもチェックインも迷わず進めます。";
@@ -4311,6 +4318,10 @@ els.dialogReportBtn.addEventListener("click", () => {
 });
 
 els.homeEntryBtn.addEventListener("click", () => {
+  if (state.tournament?.status === "finished" || !visibleHomeTournaments().length) {
+    go("past");
+    return;
+  }
   requestEntryWithNotice();
 });
 
