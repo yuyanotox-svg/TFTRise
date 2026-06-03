@@ -93,6 +93,7 @@ const els = {
   homePlayerCount: document.querySelector("#homePlayerCount"),
   homeSubCount: document.querySelector("#homeSubCount"),
   homeCompletedGames: document.querySelector("#homeCompletedGames"),
+  homeRisePoints: document.querySelector("#homeRisePoints"),
   entryCtaPanel: document.querySelector("#entryCtaPanel"),
   entryCtaTitle: document.querySelector("#entryCtaTitle"),
   entryCtaText: document.querySelector("#entryCtaText"),
@@ -999,6 +1000,7 @@ function renderHome() {
     els.homePlayerCount.textContent = "0";
     els.homeSubCount.textContent = "0";
     els.homeCompletedGames.textContent = "0/6";
+    if (els.homeRisePoints) els.homeRisePoints.textContent = currentProfile ? `${getProfileRiseSummary(currentProfile).total}` : "-";
     renderPublicPlayers([], []);
     renderPublicStandings("none");
     renderPublicLobbies("none");
@@ -1034,6 +1036,7 @@ function renderHome() {
   els.homePlayerCount.textContent = `${mainPlayers.length}/${state.tournament.maxPlayers || 256}`;
   els.homeSubCount.textContent = subs.length;
   els.homeCompletedGames.textContent = `${countCompletedGames()}/6`;
+  if (els.homeRisePoints) els.homeRisePoints.textContent = currentProfile ? `${getProfileRiseSummary(currentProfile).total}` : "-";
   renderPublicPlayers(mainPlayers, subs);
   renderPublicStandings(status);
   renderPublicLobbies(status);
@@ -1852,10 +1855,13 @@ function renderMyPage() {
   }
 
   const player = getPlayer(playerId);
+  const riseSummary = getProfileRiseSummary(profile);
   if (!player) {
     els.mySummary.innerHTML = `
       <article><span>選手</span><strong>${escapeHtml(profile.displayName || "-")}</strong></article>
       <article><span>状態</span><strong>未エントリー</strong></article>
+      <article><span>総合RiseP</span><strong>${riseSummary.total}</strong></article>
+      <article><span>月間RiseP</span><strong>${riseSummary.monthly}</strong></article>
     `;
     renderMyProfile(profile);
     renderNextAction(null);
@@ -1872,11 +1878,14 @@ function renderMyPage() {
   const standing = calculateStandings().findIndex((row) => row.player.id === playerId) + 1;
   const standingText = played || ["live", "finished"].includes(state.tournament?.status) ? standing || "-" : "-";
   const checkInLabel = player.checkedInAt ? "済" : player.didNotCheckIn ? "不参加" : "未";
+  const playerRiseSummary = getProfileRiseSummary(player);
 
   els.mySummary.innerHTML = `
     <article><span>選手</span><strong>${escapeHtml(player.displayName)}</strong></article>
     <article><span>総合順位</span><strong>${standingText}</strong></article>
     <article><span>獲得pt</span><strong>${points}</strong></article>
+    <article><span>総合RiseP</span><strong>${playerRiseSummary.total}</strong></article>
+    <article><span>月間RiseP</span><strong>${playerRiseSummary.monthly}</strong></article>
     <article><span>消化</span><strong>${played}/6</strong></article>
     <article><span>チェックイン</span><strong>${player.checkedInAt ? "済" : "未"}</strong></article>
   `;
@@ -3986,6 +3995,43 @@ function calculateTournamentStandings(tournamentState) {
       a.finalPlacement - b.finalPlacement ||
       a.player.displayName.localeCompare(b.player.displayName, "ja")
     );
+}
+
+function risePointsForRank(rank) {
+  if (rank === 1) return 20;
+  if (rank === 2) return 15;
+  if (rank === 3) return 12;
+  if (rank === 4) return 10;
+  if (rank <= 8) return 6;
+  if (rank <= 16) return 3;
+  return 0;
+}
+
+function getProfileRiseSummary(profile) {
+  const key = profileIdentityKey(profile);
+  if (!key) return { total: 0, monthly: 0, tournaments: 0 };
+  const now = new Date();
+  return (state.tournaments || [])
+    .filter((item) => item.tournament?.status === "finished")
+    .reduce((summary, item) => {
+      const standings = calculateTournamentStandings(item);
+      const index = standings.findIndex((row) => profileIdentityKey(row.player) === key);
+      if (index < 0) return summary;
+      const riseP = risePointsForRank(index + 1);
+      if (!riseP) return summary;
+      const date = item.tournament?.startAt ? new Date(item.tournament.startAt) : null;
+      const isMonthly = date && !Number.isNaN(date.getTime())
+        && date.getFullYear() === now.getFullYear()
+        && date.getMonth() === now.getMonth();
+      summary.total += riseP;
+      if (isMonthly) summary.monthly += riseP;
+      summary.tournaments += 1;
+      return summary;
+    }, { total: 0, monthly: 0, tournaments: 0 });
+}
+
+function profileIdentityKey(profile = {}) {
+  return normalize(profile.riotId || profile.accountEmail || profile.discordId || profile.displayName || profile.id || "");
 }
 
 function countCompletedGames() {
