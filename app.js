@@ -1630,7 +1630,7 @@ function renderReportGate(target, pending = getCurrentPendingReportBlock()) {
 }
 
 function renderReportSubmitter() {
-  const player = getPlayer(currentUserId);
+  const player = getPlayer(getCurrentTournamentPlayerId());
   const profile = player || currentProfile;
   els.reportSubmitterName.textContent = profile?.displayName
     ? `${profile.displayName} として提出`
@@ -1643,13 +1643,31 @@ function getCurrentReportTarget() {
   return targets.find((target) => reportTargetKey(target) === selected) || targets[0] || null;
 }
 
+function getCurrentTournamentPlayerId() {
+  if (currentUserId && getPlayer(currentUserId)) return currentUserId;
+  const profile = currentProfile || {};
+  const riotKey = normalize(profile.riotId || "");
+  const nameKey = normalize(profile.displayName || "");
+  const match = state.players.find((player) => (
+    (riotKey && normalize(player.riotId || "") === riotKey)
+    || (nameKey && normalize(player.displayName || "") === nameKey)
+  ));
+  if (match) {
+    currentUserId = match.id;
+    localStorage.setItem(SESSION_KEY, currentUserId);
+    return match.id;
+  }
+  return currentUserId || "";
+}
+
 function getAvailableReportTargets() {
-  if (!currentUserId || !hasTournament()) return [];
+  const playerId = getCurrentTournamentPlayerId();
+  if (!playerId || !hasTournament()) return [];
   const targets = [];
   for (const game of [1, 2, 3, 4, 5, 6]) {
     const blockIndex = getBlockIndex(game);
     const lobbies = state.lobbies[blockIndex] || [];
-    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
+    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
     if (lobbyIndex < 0) continue;
     const lobby = lobbies[lobbyIndex];
     if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
@@ -1668,7 +1686,8 @@ function getAvailableReportTargets() {
 
 function getFallbackReportTargetFromCurrentLobby() {
   if (state.tournament?.status !== "live") return null;
-  const entry = findCurrentLobbyEntry(currentUserId);
+  const playerId = getCurrentTournamentPlayerId();
+  const entry = findCurrentLobbyEntry(playerId);
   if (!entry) return null;
   const blockIndex = getBlockIndex(entry.block.games[0]);
   const game = entry.block.games.find((gameNo) => (
@@ -1685,7 +1704,8 @@ function getFallbackReportTargetFromCurrentLobby() {
 }
 
 function hasCurrentPlayerResult(gameNo) {
-  return Boolean(currentUserId && state.results?.[gameNo]?.[currentUserId]);
+  const playerId = getCurrentTournamentPlayerId();
+  return Boolean(playerId && state.results?.[gameNo]?.[playerId]);
 }
 
 function isGameReportClosed(gameNo, lobbyIndex, lobby) {
@@ -1720,11 +1740,12 @@ function getPendingReportForGameLobby(gameNo, lobbyNo) {
 }
 
 function getCurrentPendingReportBlock() {
-  if (!currentUserId || !hasTournament()) return null;
+  const playerId = getCurrentTournamentPlayerId();
+  if (!playerId || !hasTournament()) return null;
   for (const game of [1, 2, 3, 4, 5, 6]) {
     const blockIndex = getBlockIndex(game);
     const lobbies = state.lobbies[blockIndex] || [];
-    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
+    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
     if (lobbyIndex < 0) continue;
     const pending = getPendingReportForGameLobby(game, lobbyIndex + 1);
     if (pending) return { ...pending, blockIndex, lobbyIndex };
@@ -3477,7 +3498,8 @@ function submitManualReport() {
 }
 
 function addReport(method, matches) {
-  const submitterPlayer = getPlayer(currentUserId);
+  const submitterId = getCurrentTournamentPlayerId();
+  const submitterPlayer = getPlayer(submitterId);
   const submitterProfile = submitterPlayer || currentProfile || {};
   const target = getCurrentReportTarget();
   state.reports.unshift({
@@ -3487,9 +3509,9 @@ function addReport(method, matches) {
     method,
     game: target?.game || Number(els.reportGame.value),
     lobby: target ? target.lobbyIndex + 1 : Number(els.reportLobby.value) + 1,
-    winnerId: currentUserId || "",
+    winnerId: submitterId || currentUserId || "",
     submitter: {
-      id: currentUserId || "",
+      id: submitterId || currentUserId || "",
       displayName: submitterProfile.displayName || "",
       riotId: submitterProfile.riotId || "",
       discordId: submitterProfile.discordId || "",
