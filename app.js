@@ -3460,26 +3460,60 @@ function maybeGenerateNextLobbyBlock() {
   generateNextLobbyBlock({ silent: true });
 }
 
-function seed256Players() {
-  const testPlayers = [];
-  for (let i = 1; i <= 256; i += 1) {
-    const number = String(i).padStart(3, "0");
-    const displayName = `TestPlayer${number}`;
-    testPlayers.push({
-      id: uid(),
-      displayName,
-      riotId: `TestPlayer${number}#JP1`,
-      discordId: `@testplayer${number}`,
-      xAccount: `@tft_test_${number}`,
-      isSubstitute: false,
-    });
+function fillDebugPlayersToCapacity() {
+  if (!hasTournament()) {
+    notify("大会がありません", "先に大会を作成してください。", "warn");
+    return;
   }
-  state.players = testPlayers;
+  const maxPlayers = Math.min(256, Math.max(8, Number(state.tournament?.maxPlayers || 256)));
+  const mainPlayers = state.players.filter((player) => !player.isSubstitute);
+  const needed = Math.max(0, maxPlayers - mainPlayers.length);
+  if (!needed) {
+    state.players.forEach((player) => {
+      player.checkedInAt = player.checkedInAt || new Date().toISOString();
+      player.didNotCheckIn = false;
+      player.isSubstitute = false;
+    });
+    render();
+    notify("満枠です", "既存参加者をチェックイン済みにしました。", "success");
+    return;
+  }
+  const ok = confirm(`現在の大会にデバッグ参加者を${needed}名追加し、全員チェックイン済みにします。\n既存参加者は上書きしません。実行しますか？`);
+  if (!ok) return;
+  const checkedInAt = new Date().toISOString();
+  const usedRiotIds = new Set(state.players.map((player) => normalize(player.riotId)));
+  let added = 0;
+  let seedIndex = 1;
+  while (added < needed) {
+    const number = String(seedIndex).padStart(3, "0");
+    const riotId = `DebugPlayer${number}#JP1`;
+    seedIndex += 1;
+    if (usedRiotIds.has(normalize(riotId))) continue;
+    usedRiotIds.add(normalize(riotId));
+    state.players.push({
+      id: uid(),
+      displayName: `DebugPlayer${number}`,
+      riotId,
+      discordId: `@debug_player_${number}`,
+      xAccount: `@tftrise_debug_${number}`,
+      accountEmail: "",
+      checkedInAt,
+      isSubstitute: false,
+      didNotCheckIn: false,
+    });
+    added += 1;
+  }
+  state.players.forEach((player) => {
+    player.checkedInAt = player.checkedInAt || checkedInAt;
+    player.didNotCheckIn = false;
+    player.isSubstitute = false;
+  });
   state.lobbies = [];
   state.lobbyHosts = [];
   state.results = {};
   state.reports = [];
   render();
+  notify("デバッグ参加者を追加しました", `${added}名を追加し、${state.players.length}名をチェックイン済みにしました。`, "success");
 }
 
 function updateAdminResult(gameNo, playerId, placement) {
@@ -4207,7 +4241,7 @@ els.blockActions.addEventListener("click", (event) => {
   generateBlock(Number(button.dataset.block));
 });
 els.generateAllBtn.addEventListener("click", () => generateAllLobbies());
-els.seed256Btn.addEventListener("click", seed256Players);
+els.seed256Btn.addEventListener("click", fillDebugPlayersToCapacity);
 els.adminResultsOutput.addEventListener("change", (event) => {
   if (event.target.tagName !== "SELECT") return;
   updateAdminResult(event.target.dataset.game, event.target.dataset.player, event.target.value);
