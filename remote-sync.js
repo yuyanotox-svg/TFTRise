@@ -690,7 +690,7 @@
             <p class="eyebrow">Competitive Records</p>
             <h3>\u7af6\u6280\u30e9\u30f3\u30ad\u30f3\u30b0</h3>
           </div>
-          <span>\u5927\u4f1a\u30ec\u30d9\u30eb\u5225\u306e\u96c6\u8a08\u306b\u5bfe\u5fdc\u4e88\u5b9a</span>
+          <span>\u5927\u4f1a\u6700\u7d42\u9806\u4f4d\u304b\u3089RiseP\u3092\u96c6\u8a08</span>
         </div>
         <div class="records-leaderboards">
           ${leaderboardMarkup("\u30c7\u30a4\u30ea\u30fc", calculateCompetitiveLeaderboard(data, "daily"), "\u4eca\u65e5\u306e\u4e0a\u4f4d")}
@@ -714,7 +714,7 @@
             <div class="records-player-row ${row.playerId === currentUserId ? "is-current" : ""}">
               <b>${index + 1}</b>
               <span>${escapeHtml(row.displayName)}</span>
-              <strong>${row.rewardPoints}pt</strong>
+              <strong>${row.rewardPoints} RiseP</strong>
             </div>
           `).join("") : `<div class="empty-state">\u307e\u3060\u30e9\u30f3\u30ad\u30f3\u30b0\u5bfe\u8c61\u306e\u6210\u7e3e\u306f\u3042\u308a\u307e\u305b\u3093\u3002</div>`}
         </div>
@@ -756,7 +756,7 @@
       .forEach((item) => {
         calculateTournamentStandings(item).forEach((row, index) => {
           const rank = index + 1;
-          const rewardPoints = row.points;
+          const rewardPoints = risePointsForRank(rank);
           if (!rewardPoints) return;
           const key = normalizeLoose(row.player.riotId || row.player.accountEmail || row.player.discordId || row.player.displayName || row.player.id);
           const record = ledger.get(key) || { playerId: row.player.id, displayName: row.player.displayName || "Player", rewardPoints: 0, wins: 0, podiums: 0, top8s: 0 };
@@ -768,6 +768,16 @@
         });
       });
     return [...ledger.values()].sort((a, b) => b.rewardPoints - a.rewardPoints || b.wins - a.wins || b.podiums - a.podiums || b.top8s - a.top8s || a.displayName.localeCompare(b.displayName, "ja"));
+  }
+
+  function risePointsForRank(rank) {
+    if (rank === 1) return 20;
+    if (rank === 2) return 15;
+    if (rank === 3) return 12;
+    if (rank === 4) return 10;
+    if (rank <= 8) return 6;
+    if (rank <= 16) return 3;
+    return 0;
   }
 
   function calculateTournamentStandings(tournamentState) {
