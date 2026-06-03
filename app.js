@@ -2734,6 +2734,10 @@ function maybeShowHostDialog(playerId) {
 }
 
 function renderMyHistory(history) {
+  if (state.tournament?.status === "finished") {
+    els.myHistoryOutput.innerHTML = "";
+    return;
+  }
   els.myHistoryOutput.innerHTML = `
     <h3>成績</h3>
     <div class="history">${history.map((placement) => `<span>${placement || "-"}</span>`).join("")}</div>
