@@ -492,7 +492,7 @@ function ensureActiveTournamentForMyPage() {
 
 function ensureReportTournament() {
   const profileMatch = findTournamentForCurrentProfile();
-  if (profileMatch && tournamentHasLobbies(profileMatch.tour)) {
+  if (profileMatch && ["live", "ready"].includes(profileMatch.tour.tournament?.status) && tournamentHasLobbies(profileMatch.tour)) {
     if (state.activeTournamentId !== profileMatch.tour.id) setActiveTournamentFromSnapshot(profileMatch.tour);
     currentUserId = profileMatch.player.id;
     localStorage.setItem(SESSION_KEY, currentUserId);
@@ -1687,30 +1687,36 @@ function getCurrentTournamentPlayerId() {
 
 function getAvailableReportTargets() {
   const playerId = getCurrentTournamentPlayerId();
-  if (!playerId || !hasTournament()) return [];
+  if (!hasTournament()) return [];
   const targets = [];
-  for (const game of [1, 2, 3, 4, 5, 6]) {
-    const blockIndex = getBlockIndex(game);
-    const lobbies = state.lobbies[blockIndex] || [];
-    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
-    if (lobbyIndex < 0) continue;
-    const lobby = lobbies[lobbyIndex];
-    if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
-    if (hasCurrentPlayerResult(game)) continue;
-    if (isGameReportClosed(game, lobbyIndex, lobby)) continue;
-    const previousGames = (getLobbyBlocks()[blockIndex]?.games || []).filter((item) => item < game);
-    const previousDone = previousGames.every((previousGame) => (
-      isGameReportClosed(previousGame, lobbyIndex, lobby) || hasCurrentPlayerResult(previousGame)
-    ));
-    if (previousDone) targets.push({ game, blockIndex, lobbyIndex, lobby });
+  if (playerId) {
+    for (const game of [1, 2, 3, 4, 5, 6]) {
+      const blockIndex = getBlockIndex(game);
+      const lobbies = state.lobbies[blockIndex] || [];
+      const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
+      if (lobbyIndex < 0) continue;
+      const lobby = lobbies[lobbyIndex];
+      if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
+      if (hasCurrentPlayerResult(game)) continue;
+      if (isGameReportClosed(game, lobbyIndex, lobby)) continue;
+      const previousGames = (getLobbyBlocks()[blockIndex]?.games || []).filter((item) => item < game);
+      const previousDone = previousGames.every((previousGame) => (
+        isGameReportClosed(previousGame, lobbyIndex, lobby) || hasCurrentPlayerResult(previousGame)
+      ));
+      if (previousDone) targets.push({ game, blockIndex, lobbyIndex, lobby });
+    }
   }
   if (targets.length) return targets;
   const fallback = getFallbackReportTargetFromCurrentLobby();
-  return fallback ? [fallback] : getAllOpenReportTargets();
+  if (fallback) return [fallback];
+  const openTargets = getAllOpenReportTargets();
+  if (openTargets.length) return openTargets;
+  if (activateTournamentWithReportableLobbies()) return getAllOpenReportTargets();
+  return [];
 }
 
 function getAllOpenReportTargets() {
-  if (!hasTournament() || state.tournament?.status !== "live") return [];
+  if (!hasTournament() || !["live", "ready"].includes(state.tournament?.status)) return [];
   const targets = [];
   getLobbyBlocks().forEach((block, blockIndex) => {
     const lobbies = state.lobbies[blockIndex] || [];
@@ -1724,6 +1730,20 @@ function getAllOpenReportTargets() {
     });
   });
   return targets;
+}
+
+function activateTournamentWithReportableLobbies() {
+  const originalId = state.activeTournamentId;
+  const candidates = (state.tournaments || [])
+    .filter((item) => ["live", "ready"].includes(item.tournament?.status) && tournamentHasLobbies(item))
+    .sort((a, b) => new Date(b.tournament?.startAt || 0) - new Date(a.tournament?.startAt || 0));
+  for (const candidate of candidates) {
+    setActiveTournamentFromSnapshot(candidate);
+    if (getAllOpenReportTargets().length) return true;
+  }
+  const original = (state.tournaments || []).find((item) => item.id === originalId);
+  if (original) setActiveTournamentFromSnapshot(original);
+  return false;
 }
 
 function getFallbackReportTargetFromCurrentLobby() {
@@ -1763,15 +1783,23 @@ function isGameReportClosed(gameNo, lobbyIndex, lobby) {
 
 function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
   return (state.reports || []).some((report) => (
-    report.status !== "rejected"
+    reportBelongsToActiveTournament(report)
+    && report.status !== "rejected"
     && Number(report.game) === Number(gameNo)
     && Number(report.lobby) === Number(lobbyNo)
   ));
 }
 
+function reportBelongsToActiveTournament(report) {
+  const activeId = state.activeTournamentId || state.tournament?.id || "";
+  if (!activeId) return true;
+  return Boolean(report?.tournamentId && report.tournamentId === activeId);
+}
+
 function hasApprovedReportForGameLobby(gameNo, lobbyNo) {
   return (state.reports || []).some((report) => (
-    report.status === "approved"
+    reportBelongsToActiveTournament(report)
+    && report.status === "approved"
     && Number(report.game) === Number(gameNo)
     && Number(report.lobby) === Number(lobbyNo)
   ));
@@ -1779,10 +1807,10 @@ function hasApprovedReportForGameLobby(gameNo, lobbyNo) {
 
 function getPendingReportForGameLobby(gameNo, lobbyNo) {
   return (state.reports || []).find((report) => (
-    report.status === "pending"
+    reportBelongsToActiveTournament(report)
+    && report.status === "pending"
     && Number(report.game) === Number(gameNo)
     && Number(report.lobby) === Number(lobbyNo)
-    && (!report.tournamentId || report.tournamentId === state.activeTournamentId)
   ));
 }
 
@@ -3607,7 +3635,8 @@ function validateReportMatches(matches) {
   }
 
   const pendingReport = (state.reports || []).find((report) => (
-    report.status !== "rejected"
+    reportBelongsToActiveTournament(report)
+    && report.status !== "rejected"
     && Number(report.game) === Number(target.game)
     && Number(report.lobby) === Number(target.lobbyIndex + 1)
   ));
