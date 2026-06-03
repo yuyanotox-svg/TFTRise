@@ -3360,6 +3360,38 @@ input:focus, select:focus {
   font-weight: 950;
 }
 
+.pending-report-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(255, 94, 118, 0.55);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(94, 28, 45, 0.92), rgba(35, 44, 70, 0.88));
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+}
+
+.pending-report-callout span {
+  display: block;
+  color: #ff8798;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pending-report-callout strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--paper);
+  font-size: 1.08rem;
+}
+
+.pending-report-callout p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
 .report-history-item {
   display: grid;
   grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(180px, 0.9fr) minmax(260px, 1.4fr);

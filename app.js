@@ -909,7 +909,7 @@ function render() {
 
 function renderTopActions() {
   els.logoutTopBtn.classList.toggle("hidden", !currentProfile);
-  const canReport = Boolean(getCurrentReportTarget());
+  const canReport = Boolean(getCurrentReportTarget() || getCurrentPendingReportBlock());
   els.reportNavBtn.classList.toggle("hidden", !canReport);
   renderMyPageGlobalAlert();
 }
@@ -1578,6 +1578,7 @@ function renderPublicLobbies(status) {
 
 function renderReportSelectors() {
   const targets = getAvailableReportTargets();
+  const pending = getCurrentPendingReportBlock();
   const currentValue = els.reportTargetSelect?.value || "";
   const target = targets.find((item) => reportTargetKey(item) === currentValue) || targets[0] || null;
   els.reportGame.value = target?.game ? String(target.game) : "";
@@ -1586,7 +1587,12 @@ function renderReportSelectors() {
     ? `Game ${target.game} / Lobby ${target.lobbyIndex + 1}`
     : "あなたの報告対象ロビーはまだありません";
   renderReportTargetSelect(targets, target);
-  renderReportGate(target);
+  if (!target) {
+    els.reportTargetSummary.textContent = pending
+      ? `Game ${pending.game} / Lobby ${pending.lobby} は承認待ちです`
+      : "報告できるロビーはまだありません";
+  }
+  renderReportGate(target, pending);
   renderReportSubmitter();
   renderManualFallback();
 }
@@ -1607,12 +1613,17 @@ function reportTargetKey(target) {
   return `${target.game}:${target.lobbyIndex}`;
 }
 
-function renderReportGate(target) {
+function renderReportGate(target, pending = getCurrentPendingReportBlock()) {
   const locked = !target;
   els.reportGate.classList.toggle("hidden", !locked);
   els.reportGate.textContent = locked
     ? "報告できるロビーがまだありません。大会開始後、管理側がロビーを生成すると自動で表示されます。"
     : "";
+  if (locked) {
+    els.reportGate.textContent = pending
+      ? `Game ${pending.game} / Lobby ${pending.lobby} の結果が管理承認待ちです。承認されると次の試合の報告へ進めます。`
+      : "報告できるロビーはまだありません。大会開始後、管理者がロビーを生成すると表示されます。";
+  }
   [els.reportImage, els.analyzeReportBtn, els.submitOcrBtn, els.submitManualBtn].forEach((control) => {
     control.disabled = locked;
   });
@@ -1641,6 +1652,7 @@ function getAvailableReportTargets() {
     const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
     if (lobbyIndex < 0) continue;
     const lobby = lobbies[lobbyIndex];
+    if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
     if (isGameReportClosed(game, lobbyIndex, lobby)) continue;
     const previousGames = (getLobbyBlocks()[blockIndex]?.games || []).filter((item) => item < game);
     const previousDone = previousGames.every((previousGame) => isGameReportClosed(previousGame, lobbyIndex, lobby));
@@ -1652,8 +1664,7 @@ function getAvailableReportTargets() {
 function isGameReportClosed(gameNo, lobbyIndex, lobby) {
   const results = state.results[gameNo] || {};
   const completed = lobby.length && lobby.every((playerId) => results[playerId]);
-  const currentPlayerDone = currentUserId ? Boolean(results[currentUserId]) : false;
-  return Boolean(completed || currentPlayerDone || hasSubmittedReportForGameLobby(gameNo, lobbyIndex + 1));
+  return Boolean(completed || hasApprovedReportForGameLobby(gameNo, lobbyIndex + 1));
 }
 
 function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
@@ -1662,6 +1673,36 @@ function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
     && Number(report.game) === Number(gameNo)
     && Number(report.lobby) === Number(lobbyNo)
   ));
+}
+
+function hasApprovedReportForGameLobby(gameNo, lobbyNo) {
+  return (state.reports || []).some((report) => (
+    report.status === "approved"
+    && Number(report.game) === Number(gameNo)
+    && Number(report.lobby) === Number(lobbyNo)
+  ));
+}
+
+function getPendingReportForGameLobby(gameNo, lobbyNo) {
+  return (state.reports || []).find((report) => (
+    report.status === "pending"
+    && Number(report.game) === Number(gameNo)
+    && Number(report.lobby) === Number(lobbyNo)
+    && (!report.tournamentId || report.tournamentId === state.activeTournamentId)
+  ));
+}
+
+function getCurrentPendingReportBlock() {
+  if (!currentUserId || !hasTournament()) return null;
+  for (const game of [1, 2, 3, 4, 5, 6]) {
+    const blockIndex = getBlockIndex(game);
+    const lobbies = state.lobbies[blockIndex] || [];
+    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
+    if (lobbyIndex < 0) continue;
+    const pending = getPendingReportForGameLobby(game, lobbyIndex + 1);
+    if (pending) return { ...pending, blockIndex, lobbyIndex };
+  }
+  return null;
 }
 
 function renderMyPage() {
@@ -1770,6 +1811,8 @@ function renderMyPageTabNotes(tournamentAlerts, accountAlerts) {
 }
 
 function getTournamentAlerts(player) {
+  const pending = player ? getCurrentPendingReportBlock() : null;
+  if (pending) return [{ badge: "承認待ち", text: `Game ${pending.game} / Lobby ${pending.lobby} の結果が管理承認待ちです。承認後に次の試合へ進めます。` }];
   if (!currentProfile) return [];
   if (!hasTournament()) return [];
   const checkInState = checkInWindowState();
@@ -1891,6 +1934,11 @@ function renderNextAction(player) {
   }
   if (!player.checkedInAt && checkInState.state === "open") {
     els.myNextAction.innerHTML = nextActionMarkup("チェックイン受付中", "大会開始前の30分間です。参加するなら今チェックインしてください。", "", "チェックイン", "check-in-now");
+    return;
+  }
+  const pendingReport = getCurrentPendingReportBlock();
+  if (status === "live" && pendingReport) {
+    els.myNextAction.innerHTML = nextActionMarkup("管理承認待ち", `Game ${pendingReport.game} / Lobby ${pendingReport.lobby} の結果報告が承認待ちです。管理者が承認すると次の試合へ進めます。`, "report", "報告画面へ");
     return;
   }
   const reportTarget = getCurrentReportTarget();
@@ -2580,6 +2628,13 @@ function renderAdmin() {
   renderStandings();
 }
 
+function getPendingReports() {
+  return (state.reports || []).filter((report) => (
+    report.status === "pending"
+    && (!report.tournamentId || report.tournamentId === state.activeTournamentId)
+  ));
+}
+
 function renderAdminOpsChecklist() {
   if (!els.adminOpsChecklist) return;
   if (els.startReadinessOutput) els.startReadinessOutput.innerHTML = "";
@@ -2662,6 +2717,17 @@ function renderAdminOpsChecklist() {
 }
 
 function getAdminNextAction({ status, checkedIn, activePlayers, currentBlock, currentBlockIndex, hasCurrentLobby }) {
+  const pendingCount = getPendingReports().length;
+  if (pendingCount) {
+    return {
+      eyebrow: "APPROVAL",
+      title: "結果承認待ち",
+      text: `${pendingCount}件の結果報告が承認待ちです。承認して反映すると次の試合へ進めます。`,
+      action: "承認待ちを確認",
+      actionKey: "focus-results",
+      tone: "danger",
+    };
+  }
   if (!state.tournament.startAt) {
     return {
       eyebrow: "MISSING",
@@ -3158,6 +3224,19 @@ function renderAdminResults() {
       <span>${state.reports.length}件</span>
     </div>
   `;
+  const pendingReports = getPendingReports();
+  if (pendingReports.length) {
+    history.insertAdjacentHTML("beforeend", `
+      <div class="pending-report-callout">
+        <div>
+          <span>承認待ち</span>
+          <strong>${pendingReports.length}件の結果報告があります</strong>
+          <p>Game 1など前試合の承認が終わるまで、参加者は次の試合報告へ進めません。</p>
+        </div>
+        <button class="primary-button jump-pending-report" type="button">最初の承認待ちへ</button>
+      </div>
+    `);
+  }
   if (!state.reports.length) {
     history.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ結果報告はありません。</div>`);
   } else {
@@ -4401,6 +4480,11 @@ els.adminResultsOutput.addEventListener("change", (event) => {
   updateAdminResult(event.target.dataset.game, event.target.dataset.player, event.target.value);
 });
 els.adminResultsOutput.addEventListener("click", (event) => {
+  const jumpPending = event.target.closest(".jump-pending-report");
+  if (jumpPending) {
+    els.adminResultsOutput.querySelector(".report-history-item.is-pending")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   const approve = event.target.closest(".approve-report");
   if (approve) {
     approveReport(approve.dataset.reportId);
