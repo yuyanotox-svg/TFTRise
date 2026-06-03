@@ -141,6 +141,7 @@ const els = {
   guideCloseBtn: document.querySelector("#guideCloseBtn"),
   reportGame: document.querySelector("#reportGame"),
   reportLobby: document.querySelector("#reportLobby"),
+  reportTargetSelect: document.querySelector("#reportTargetSelect"),
   reportTargetSummary: document.querySelector("#reportTargetSummary"),
   reportSubmitterName: document.querySelector("#reportSubmitterName"),
   reportGate: document.querySelector("#reportGate"),
@@ -1576,15 +1577,34 @@ function renderPublicLobbies(status) {
 }
 
 function renderReportSelectors() {
-  const target = getCurrentReportTarget();
+  const targets = getAvailableReportTargets();
+  const currentValue = els.reportTargetSelect?.value || "";
+  const target = targets.find((item) => reportTargetKey(item) === currentValue) || targets[0] || null;
   els.reportGame.value = target?.game ? String(target.game) : "";
   els.reportLobby.value = target?.lobbyIndex >= 0 ? String(target.lobbyIndex) : "";
   els.reportTargetSummary.textContent = target
     ? `Game ${target.game} / Lobby ${target.lobbyIndex + 1}`
     : "あなたの報告対象ロビーはまだありません";
+  renderReportTargetSelect(targets, target);
   renderReportGate(target);
   renderReportSubmitter();
   renderManualFallback();
+}
+
+function renderReportTargetSelect(targets, selectedTarget) {
+  if (!els.reportTargetSelect) return;
+  els.reportTargetSelect.innerHTML = targets.length
+    ? targets.map((target) => {
+      const key = reportTargetKey(target);
+      return `<option value="${escapeHtml(key)}" ${key === reportTargetKey(selectedTarget) ? "selected" : ""}>Game ${target.game} / Lobby ${target.lobbyIndex + 1}</option>`;
+    }).join("")
+    : `<option value="">報告対象なし</option>`;
+  els.reportTargetSelect.disabled = targets.length <= 1;
+}
+
+function reportTargetKey(target) {
+  if (!target) return "";
+  return `${target.game}:${target.lobbyIndex}`;
 }
 
 function renderReportGate(target) {
@@ -1607,19 +1627,32 @@ function renderReportSubmitter() {
 }
 
 function getCurrentReportTarget() {
-  if (!currentUserId || !hasTournament()) return null;
+  const targets = getAvailableReportTargets();
+  const selected = els.reportTargetSelect?.value || "";
+  return targets.find((target) => reportTargetKey(target) === selected) || targets[0] || null;
+}
+
+function getAvailableReportTargets() {
+  if (!currentUserId || !hasTournament()) return [];
+  const targets = [];
   for (const game of [1, 2, 3, 4, 5, 6]) {
     const blockIndex = getBlockIndex(game);
     const lobbies = state.lobbies[blockIndex] || [];
     const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(currentUserId));
     if (lobbyIndex < 0) continue;
     const lobby = lobbies[lobbyIndex];
-    const results = state.results[game] || {};
-    const completed = lobby.length && lobby.every((playerId) => results[playerId]);
-    if (hasSubmittedReportForGameLobby(game, lobbyIndex + 1)) continue;
-    if (!completed) return { game, blockIndex, lobbyIndex, lobby };
+    if (isGameReportClosed(game, lobbyIndex, lobby)) continue;
+    const previousGames = (getLobbyBlocks()[blockIndex]?.games || []).filter((item) => item < game);
+    const previousDone = previousGames.every((previousGame) => isGameReportClosed(previousGame, lobbyIndex, lobby));
+    if (previousDone) targets.push({ game, blockIndex, lobbyIndex, lobby });
   }
-  return null;
+  return targets;
+}
+
+function isGameReportClosed(gameNo, lobbyIndex, lobby) {
+  const results = state.results[gameNo] || {};
+  const completed = lobby.length && lobby.every((playerId) => results[playerId]);
+  return Boolean(completed || hasSubmittedReportForGameLobby(gameNo, lobbyIndex + 1));
 }
 
 function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
@@ -4297,9 +4330,10 @@ els.authSubmitBtn.addEventListener("click", async (event) => {
   }
 });
 
-els.reportGame.addEventListener("change", renderReportSelectors);
-els.reportLobby.addEventListener("change", () => {
-  renderReportSubmitter();
+els.reportTargetSelect?.addEventListener("change", () => {
+  latestReportMatches = [];
+  els.reportMatches.innerHTML = "";
+  renderReportSelectors();
   renderManualFallback();
 });
 
