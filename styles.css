@@ -332,9 +332,43 @@ h1, h2, h3, p { margin: 0; }
   max-width: 360px;
 }
 
+.header-user-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rise-points-badge {
+  display: grid;
+  gap: 1px;
+  min-width: 92px;
+  min-height: 42px;
+  border: 1px solid rgba(88, 199, 255, 0.5);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #e7f8ff;
+  background: linear-gradient(180deg, rgba(20, 46, 75, 0.96), rgba(9, 20, 36, 0.96));
+  box-shadow: 0 10px 26px rgba(88, 199, 255, 0.14);
+  text-align: left;
+}
+
+.rise-points-badge span {
+  color: var(--blue);
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.rise-points-badge strong {
+  color: #fff8dd;
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .mypage-top-button {
   position: relative;
-  justify-self: end;
   min-height: 42px;
   border: 1px solid rgba(239, 197, 109, 0.78);
   border-radius: 6px;
@@ -1098,7 +1132,7 @@ main {
 
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-top: 16px;
 }
@@ -4035,7 +4069,7 @@ td { color: #f7ecd2; font-size: 0.93rem; }
     overflow-x: auto;
   }
 
-  .mypage-top-button {
+  .header-user-actions {
     justify-self: start;
   }
 
@@ -4109,8 +4143,7 @@ td { color: #f7ecd2; font-size: 0.93rem; }
 
   .nav-button,
   .owner-options,
-  .admin-open,
-  .mypage-top-button {
+  .admin-open {
     min-height: 38px;
     padding: 7px 8px;
     border-radius: 6px;
@@ -4129,7 +4162,7 @@ td { color: #f7ecd2; font-size: 0.93rem; }
     font-size: 0.92rem;
   }
 
-  .mypage-top-button {
+  .header-user-actions {
     display: none;
   }
 

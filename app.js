@@ -93,7 +93,7 @@ const els = {
   homePlayerCount: document.querySelector("#homePlayerCount"),
   homeSubCount: document.querySelector("#homeSubCount"),
   homeCompletedGames: document.querySelector("#homeCompletedGames"),
-  homeRisePoints: document.querySelector("#homeRisePoints"),
+  headerRisePoints: document.querySelector("#headerRisePoints"),
   entryCtaPanel: document.querySelector("#entryCtaPanel"),
   entryCtaTitle: document.querySelector("#entryCtaTitle"),
   entryCtaText: document.querySelector("#entryCtaText"),
@@ -937,7 +937,17 @@ function renderTopActions() {
   els.logoutTopBtn.classList.toggle("hidden", !currentProfile);
   const canReport = Boolean(getCurrentReportTarget() || getCurrentPendingReportBlock());
   els.reportNavBtn.classList.toggle("hidden", !canReport);
+  renderHeaderRisePoints();
   renderMyPageGlobalAlert();
+}
+
+function renderHeaderRisePoints() {
+  if (!els.headerRisePoints) return;
+  const value = currentProfile ? getProfileRiseSummary(currentProfile).total : "-";
+  const valueOutput = els.headerRisePoints.querySelector("strong");
+  if (valueOutput) valueOutput.textContent = value;
+  els.headerRisePoints.classList.toggle("is-guest", !currentProfile);
+  els.headerRisePoints.title = currentProfile ? `総合RiseP: ${value}` : "ログインするとRisePを確認できます";
 }
 
 function renderMyPageGlobalAlert() {
@@ -1000,7 +1010,6 @@ function renderHome() {
     els.homePlayerCount.textContent = "0";
     els.homeSubCount.textContent = "0";
     els.homeCompletedGames.textContent = "0/6";
-    if (els.homeRisePoints) els.homeRisePoints.textContent = currentProfile ? `${getProfileRiseSummary(currentProfile).total}` : "-";
     renderPublicPlayers([], []);
     renderPublicStandings("none");
     renderPublicLobbies("none");
@@ -1036,7 +1045,6 @@ function renderHome() {
   els.homePlayerCount.textContent = `${mainPlayers.length}/${state.tournament.maxPlayers || 256}`;
   els.homeSubCount.textContent = subs.length;
   els.homeCompletedGames.textContent = `${countCompletedGames()}/6`;
-  if (els.homeRisePoints) els.homeRisePoints.textContent = currentProfile ? `${getProfileRiseSummary(currentProfile).total}` : "-";
   renderPublicPlayers(mainPlayers, subs);
   renderPublicStandings(status);
   renderPublicLobbies(status);
