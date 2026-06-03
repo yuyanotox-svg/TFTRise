@@ -157,6 +157,7 @@ const els = {
   myAccountPanel: document.querySelector("#myAccountPanel"),
   myTournamentBadge: document.querySelector("#myTournamentBadge"),
   myAccountBadge: document.querySelector("#myAccountBadge"),
+  myPageTabNotes: document.querySelector("#myPageTabNotes"),
   myProfileOutput: document.querySelector("#myProfileOutput"),
   myLobbyOutput: document.querySelector("#myLobbyOutput"),
   myHistoryOutput: document.querySelector("#myHistoryOutput"),
@@ -1671,8 +1672,8 @@ function renderMyPage() {
 
 function renderMyPageTabs(profile, player) {
   if (!["tournament", "account"].includes(currentMyPageTab)) currentMyPageTab = "tournament";
-  const tournamentAlerts = countTournamentAlerts(player);
-  const accountAlerts = countAccountAlerts(profile);
+  const tournamentAlerts = getTournamentAlerts(player);
+  const accountAlerts = getAccountAlerts(profile);
   els.myTournamentPanel?.classList.toggle("hidden", currentMyPageTab !== "tournament");
   els.myAccountPanel?.classList.toggle("hidden", currentMyPageTab !== "account");
   els.myPageTabs?.querySelectorAll("[data-my-tab]").forEach((button) => {
@@ -1680,32 +1681,48 @@ function renderMyPageTabs(profile, player) {
   });
   updateTabAlert(els.myTournamentBadge, tournamentAlerts);
   updateTabAlert(els.myAccountBadge, accountAlerts);
+  renderMyPageTabNotes(tournamentAlerts, accountAlerts);
 }
 
-function updateTabAlert(element, count) {
+function updateTabAlert(element, alerts) {
   if (!element) return;
-  element.classList.toggle("hidden", !count);
-  element.textContent = count > 9 ? "9+" : String(count || "!");
+  const label = alertBadgeLabel(alerts);
+  element.classList.toggle("hidden", !label);
+  element.textContent = label;
 }
 
-function countTournamentAlerts(player) {
-  if (!currentProfile) return 0;
-  if (!hasTournament()) return 0;
+function alertBadgeLabel(alerts) {
+  if (!alerts?.length) return "";
+  return alerts.length === 1 ? alerts[0].badge : "要確認";
+}
+
+function renderMyPageTabNotes(tournamentAlerts, accountAlerts) {
+  if (!els.myPageTabNotes) return;
+  const alerts = currentMyPageTab === "account" ? accountAlerts : tournamentAlerts;
+  els.myPageTabNotes.classList.toggle("hidden", !alerts.length);
+  els.myPageTabNotes.innerHTML = alerts.length
+    ? alerts.map((alert) => `<span>${escapeHtml(alert.text)}</span>`).join("")
+    : "";
+}
+
+function getTournamentAlerts(player) {
+  if (!currentProfile) return [];
+  if (!hasTournament()) return [];
   const checkInState = checkInWindowState();
-  if (!player) return 1;
-  if (!player.checkedInAt && checkInState.state === "open") return 1;
-  if (getCurrentReportTarget()) return 1;
-  if (player.didNotCheckIn && ["ready", "live", "finished"].includes(state.tournament?.status)) return 1;
-  return 0;
+  if (!player) return [{ badge: "未エントリー", text: "大会に参加するには、大会カードからエントリーしてください。" }];
+  if (!player.checkedInAt && checkInState.state === "open") return [{ badge: "チェックイン", text: "チェックイン受付中です。大会情報タブからチェックインしてください。" }];
+  if (getCurrentReportTarget()) return [{ badge: "結果報告", text: "あなたが報告できる試合結果があります。結果報告へ進んでください。" }];
+  if (player.didNotCheckIn && ["ready", "live", "finished"].includes(state.tournament?.status)) return [{ badge: "不参加扱い", text: "チェックイン未完了のため、この大会は自動キャンセル扱いです。" }];
+  return [];
 }
 
-function countAccountAlerts(profile) {
-  if (!profile) return 0;
-  let count = 0;
-  if (!getCurrentAccountEmail()) count += 1;
-  if (!isValidRiotId(profile.riotId || "")) count += 1;
-  if (!profile.discordId) count += 1;
-  return count;
+function getAccountAlerts(profile) {
+  if (!profile) return [];
+  const alerts = [];
+  if (!getCurrentAccountEmail()) alerts.push({ badge: "メール未連携", text: "メールアドレスが未連携です。ログイン保守のため、アカウント設定から登録できます。" });
+  if (!isValidRiotId(profile.riotId || "")) alerts.push({ badge: "Riot ID確認", text: "Riot IDはサモナーネーム#タグの形式で入力してください。" });
+  if (!profile.discordId) alerts.push({ badge: "Discord確認", text: "Discord IDが未入力です。大会運営の連絡先として必要です。" });
+  return alerts;
 }
 
 function renderMyProfile(profile) {

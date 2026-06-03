@@ -1256,18 +1256,40 @@ main {
 
 .tab-alert {
   position: absolute;
-  top: -7px;
-  right: -7px;
-  display: inline-grid;
-  min-width: 22px;
-  height: 22px;
-  place-items: center;
+  top: -9px;
+  right: -8px;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
   border: 2px solid #080912;
   border-radius: 999px;
+  padding: 2px 8px;
   color: #fff;
   background: #ff4f68;
   font-size: 0.72rem;
   font-weight: 950;
+  white-space: nowrap;
+}
+
+.mypage-tab-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.mypage-tab-notes span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 100, 121, 0.36);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #ffd7df;
+  background: rgba(255, 100, 121, 0.1);
+  font-size: 0.82rem;
+  font-weight: 850;
 }
 
 .mypage-tab-panel {
@@ -4284,6 +4306,27 @@ td { color: #f7ecd2; font-size: 0.93rem; }
   .mypage-tab {
     min-height: 48px;
     font-size: 0.9rem;
+  }
+
+  .tab-alert {
+    top: -8px;
+    right: -5px;
+    max-width: 92px;
+    padding: 2px 6px;
+    font-size: 0.64rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mypage-tab-notes {
+    margin-top: -4px;
+  }
+
+  .mypage-tab-notes span {
+    width: 100%;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    line-height: 1.35;
   }
 
   .mypage-priority-grid,
