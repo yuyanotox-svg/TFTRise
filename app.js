@@ -463,14 +463,19 @@ function ensureActiveHomeTournament() {
 
 function findTournamentForCurrentProfile() {
   const riotKey = normalize(currentProfile?.riotId || "");
-  if (!riotKey) return null;
+  const nameKey = normalize(currentProfile?.displayName || "");
+  if (!riotKey && !nameKey) return null;
   const scored = (state.tournaments || [])
     .map((tour) => {
-      const player = (tour.players || []).find((item) => normalize(item.riotId || "") === riotKey);
+      const player = (tour.players || []).find((item) => (
+        (riotKey && normalize(item.riotId || "") === riotKey)
+        || (nameKey && normalize(item.displayName || "") === nameKey)
+      ));
       if (!player) return null;
       const status = tour.tournament?.status || "entry";
       const priority = { live: 5, ready: 4, checkin: 3, entry: 2, finished: 1 }[status] || 0;
-      return { tour, player, priority };
+      const hasLobby = (tour.lobbies || []).some((block) => (block || []).some((lobby) => lobby.includes(player.id)));
+      return { tour, player, priority: priority + (hasLobby ? 10 : 0) };
     })
     .filter(Boolean)
     .sort((a, b) => b.priority - a.priority);
@@ -895,6 +900,7 @@ function render() {
   }
   prunePrematureLobbies();
   if (hasTournament()) syncActiveTournament();
+  if (location.hash === "#report") ensureActiveTournamentForMyPage();
   ensureActiveHomeTournament();
   renderHome();
   renderPastTournaments();
