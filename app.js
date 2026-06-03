@@ -2758,7 +2758,7 @@ function renderAdmin() {
 function getPendingReports() {
   return (state.reports || []).filter((report) => (
     report.status === "pending"
-    && (!report.tournamentId || report.tournamentId === state.activeTournamentId)
+    && reportBelongsToActiveTournament(report)
   ));
 }
 
@@ -3338,6 +3338,48 @@ function renderLobbies() {
   });
 }
 
+function createReportHistoryItem(report) {
+  const submitter = report.submitter || {};
+  const winner = getPlayer(report.winnerId) || (submitter.id ? getPlayer(submitter.id) : null);
+  const matchSummary = summarizeReportMatches(report.matches || []);
+  const status = report.status || "approved";
+  const statusLabel = { pending: "承認待ち", approved: "承認済み", rejected: "却下" }[status] || "承認済み";
+  const methodLabel = { image: "画像提出", manual: "手動提出", debug: "デバッグ自動" }[report.method] || "提出";
+  const item = document.createElement("article");
+  item.className = `report-history-item ${report.method === "image" ? "is-image" : "is-manual"} is-${status}`;
+  item.innerHTML = `
+    <div class="report-history-main">
+      <span class="report-method">${escapeHtml(methodLabel)}</span>
+      <span class="report-review-status">${escapeHtml(statusLabel)}</span>
+      <strong>${escapeHtml(report.tournamentName || state.tournament?.name || "大会未選択")} / Game ${escapeHtml(String(report.game || "-"))} / Lobby ${escapeHtml(String(report.lobby || "-"))}</strong>
+      <small>${escapeHtml(formatReportTime(report.submittedAt))}</small>
+    </div>
+    <div class="report-history-person">
+      <span>提出者</span>
+      <strong>${escapeHtml(submitter.displayName || "不明")}</strong>
+      <small>${escapeHtml([submitter.riotId, submitter.discordId].filter(Boolean).join(" / ") || "-")}</small>
+      ${submitter.xAccount ? `<small>${escapeHtml(submitter.xAccount)}</small>` : ""}
+    </div>
+    <div class="report-history-person">
+      <span>報告者アカウント</span>
+      <strong>${escapeHtml(winner?.displayName || "未選択")}</strong>
+      <small>${escapeHtml(winner?.riotId || submitter.riotId || "-")}</small>
+    </div>
+    <div class="report-history-matches">
+      <span>提出内容</span>
+      <strong>${matchSummary.count}名 / ${matchSummary.completeness}</strong>
+      <small>${escapeHtml(matchSummary.text)}</small>
+      ${status === "pending" ? `
+        <div class="report-review-actions">
+          <button class="primary-button approve-report" type="button" data-report-id="${escapeHtml(report.id)}">承認して反映</button>
+          <button class="danger-button reject-report" type="button" data-report-id="${escapeHtml(report.id)}">却下</button>
+        </div>
+      ` : report.reviewedAt ? `<small>確認: ${escapeHtml(formatReportTime(report.reviewedAt))}</small>` : ""}
+    </div>
+  `;
+  return item;
+}
+
 function renderAdminResults() {
   els.adminResultsOutput.innerHTML = "";
   const history = document.createElement("section");
@@ -3363,11 +3405,12 @@ function renderAdminResults() {
         <button class="primary-button jump-pending-report" type="button">最初の承認待ちへ</button>
       </div>
     `);
+    pendingReports.forEach((report) => history.append(createReportHistoryItem(report)));
   }
   if (!state.reports.length) {
     history.insertAdjacentHTML("beforeend", `<div class="empty-state">まだ結果報告はありません。</div>`);
   } else {
-    state.reports.slice(0, 24).forEach((report) => {
+    (state.reports || []).filter((report) => report.status !== "pending").slice(0, 24).forEach((report) => {
       const submitter = report.submitter || {};
       const winner = getPlayer(report.winnerId) || (submitter.id ? getPlayer(submitter.id) : null);
       const matchSummary = summarizeReportMatches(report.matches || []);
