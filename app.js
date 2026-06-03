@@ -1874,13 +1874,14 @@ function renderMyPage() {
     <article><span>チェックイン</span><strong>${player.checkedInAt ? "済" : "未"}</strong></article>
   `;
   renderNextAction(player);
+  const isTournamentFinished = state.tournament?.status === "finished";
   const canCancelEntry = state.tournament?.status === "entry" && !player.checkedInAt;
   const cancelHelp = player.checkedInAt
     ? "チェックイン後は大会進行に影響するためキャンセルできません。"
     : canCancelEntry
       ? "受付中はキャンセルできます。"
       : "大会開始後はエントリーをキャンセルできません。";
-  els.myEntryActions.innerHTML = `
+  els.myEntryActions.innerHTML = isTournamentFinished ? "" : `
     <div class="entry-cancel-card ${canCancelEntry ? "" : "is-locked"}">
       <div>
         <span>参加中の大会</span>
@@ -2051,6 +2052,10 @@ function renderNextAction(player) {
   }
   const status = state.tournament.status;
   const checkInState = checkInWindowState();
+  if (status === "finished") {
+    els.myNextAction.innerHTML = nextActionMarkup("大会終了", "この大会は終了しました。最終順位と成績は大会成績に反映されています。", "past", "記録を見る");
+    return;
+  }
   if (player.didNotCheckIn && ["ready", "live", "finished"].includes(status)) {
     els.myNextAction.innerHTML = nextActionMarkup("チェックイン未完了", "締切までにチェックインできなかったため、この大会は自動キャンセル扱いです。次の大会で再エントリーしてください。", "home", "大会へ戻る");
     return;
@@ -2071,7 +2076,7 @@ function renderNextAction(player) {
   }
   const lobbyEntry = findCurrentLobbyEntry(player.id);
   if (status === "live" && lobbyEntry) {
-    els.myNextAction.innerHTML = nextActionMarkup("自分のロビーを確認", `Game ${lobbyEntry.block.games.join("・")} / Lobby ${lobbyEntry.lobbyIndex + 1} に参加中です。`, "", "下のロビーを見る");
+    els.myNextAction.innerHTML = nextActionMarkup("自分のロビーを確認", `Game ${lobbyEntry.activeGames.join("・")} / Lobby ${lobbyEntry.lobbyIndex + 1} に参加中です。`, "", "下のロビーを見る");
     return;
   }
   if (status === "entry") {
@@ -2623,11 +2628,17 @@ function maybeShowCheckInDialog() {
 }
 
 function renderMyLobbies(playerId) {
+  if (state.tournament?.status === "finished") {
+    els.myLobbyOutput.innerHTML = "";
+    return;
+  }
   const entries = [];
   getLobbyBlocks().forEach((block, blockIndex) => {
     (state.lobbies[blockIndex] || []).forEach((lobby, lobbyIndex) => {
       if (!lobby.includes(playerId)) return;
-      entries.push({ block, lobby, lobbyIndex });
+      const activeGames = block.games.filter((gameNo) => !isGameReportClosed(gameNo, lobbyIndex, lobby));
+      if (!activeGames.length) return;
+      entries.push({ block, activeGames, lobby, lobbyIndex });
     });
   });
 
@@ -2661,7 +2672,7 @@ function renderMyLobbies(playerId) {
     if (isHost) card.classList.add("is-host");
     card.innerHTML = `
       <div class="my-lobby-head">
-        <span>対象試合 Game ${entry.block.games.join("・")}</span>
+        <span>対象試合 Game ${entry.activeGames.join("・")}</span>
         <strong>あなたは Lobby ${entry.lobbyIndex + 1}</strong>
       </div>
       <div class="host-line ${isHost ? "is-me" : ""}">
@@ -2690,17 +2701,27 @@ function renderMyLobbies(playerId) {
 function findCurrentLobbyEntry(playerId) {
   for (const [blockIndex, block] of getLobbyBlocks().entries()) {
     const lobbies = state.lobbies[blockIndex] || [];
-    const lobbyIndex = lobbies.findIndex((lobby) => lobby.includes(playerId));
-    if (lobbyIndex >= 0) return { block, lobby: lobbies[lobbyIndex], lobbyIndex };
+    const lobbyIndex = lobbies.findIndex((lobby, index) => (
+      lobby.includes(playerId)
+      && block.games.some((gameNo) => !isGameReportClosed(gameNo, index, lobby))
+    ));
+    if (lobbyIndex >= 0) {
+      const lobby = lobbies[lobbyIndex];
+      const activeGames = block.games.filter((gameNo) => !isGameReportClosed(gameNo, lobbyIndex, lobby));
+      return { block, activeGames, lobby, lobbyIndex };
+    }
   }
   return null;
 }
 
 function maybeShowHostDialog(playerId) {
+  if (state.tournament?.status === "finished") return;
   const assignments = [];
   getLobbyBlocks().forEach((block, blockIndex) => {
     (state.lobbyHosts?.[blockIndex] || []).forEach((hostId, lobbyIndex) => {
-      if (hostId === playerId) assignments.push({ block, lobbyIndex });
+      const lobby = state.lobbies?.[blockIndex]?.[lobbyIndex] || [];
+      const activeGames = block.games.filter((gameNo) => !isGameReportClosed(gameNo, lobbyIndex, lobby));
+      if (hostId === playerId && activeGames.length) assignments.push({ block, activeGames, lobbyIndex });
     });
   });
   if (!assignments.length || els.hostDialog.open) return;
