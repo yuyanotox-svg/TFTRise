@@ -1661,7 +1661,27 @@ function getAvailableReportTargets() {
     ));
     if (previousDone) targets.push({ game, blockIndex, lobbyIndex, lobby });
   }
-  return targets;
+  if (targets.length) return targets;
+  const fallback = getFallbackReportTargetFromCurrentLobby();
+  return fallback ? [fallback] : [];
+}
+
+function getFallbackReportTargetFromCurrentLobby() {
+  if (state.tournament?.status !== "live") return null;
+  const entry = findCurrentLobbyEntry(currentUserId);
+  if (!entry) return null;
+  const blockIndex = getBlockIndex(entry.block.games[0]);
+  const game = entry.block.games.find((gameNo) => (
+    !hasCurrentPlayerResult(gameNo)
+    && !hasSubmittedReportForGameLobby(gameNo, entry.lobbyIndex + 1)
+  ));
+  if (!game) return null;
+  return {
+    game,
+    blockIndex,
+    lobbyIndex: entry.lobbyIndex,
+    lobby: entry.lobby,
+  };
 }
 
 function hasCurrentPlayerResult(gameNo) {
