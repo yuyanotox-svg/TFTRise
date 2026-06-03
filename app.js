@@ -1652,7 +1652,8 @@ function getAvailableReportTargets() {
 function isGameReportClosed(gameNo, lobbyIndex, lobby) {
   const results = state.results[gameNo] || {};
   const completed = lobby.length && lobby.every((playerId) => results[playerId]);
-  return Boolean(completed || hasSubmittedReportForGameLobby(gameNo, lobbyIndex + 1));
+  const currentPlayerDone = currentUserId ? Boolean(results[currentUserId]) : false;
+  return Boolean(completed || currentPlayerDone || hasSubmittedReportForGameLobby(gameNo, lobbyIndex + 1));
 }
 
 function hasSubmittedReportForGameLobby(gameNo, lobbyNo) {
